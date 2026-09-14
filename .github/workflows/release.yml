@@ -1,0 +1,56 @@
+name: Release binaries
+on:
+  push:
+    tags: ['v[0-9]*']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - run: make check
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build archives
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir release
+          for goos in linux darwin; do
+            for goarch in amd64 arm64; do
+              archive="release/claudex-${VERSION}-${goos}-${goarch}.tar.gz"
+              GOOS="$goos" GOARCH="$goarch" make package VERSION="$VERSION" ARCHIVE="$archive"
+            done
+          done
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/claudex-*.tar.gz
+      - name: Create draft release for maintainer review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cd release
+          sha256sum claudex-*.tar.gz > SHA256SUMS
+          gh release create "$VERSION" claudex-*.tar.gz SHA256SUMS --draft --verify-tag --title "Claudex $VERSION" --generate-notes
