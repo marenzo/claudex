@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Claudex · Observability</title>
+    <link rel="stylesheet" href="/dashboard/style.css" />
+    <script defer src="/dashboard/vendor/echarts-6.1.0.min.js"></script>
+    <script defer src="/dashboard/analytics.js"></script>
+    <script defer src="/dashboard/app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/dashboard" aria-label="Claudex dashboard"
+        ><span class="brand-mark" aria-hidden="true">c<span>▰</span></span
+        ><span>claudex<small>LOCAL GATEWAY</small></span></a
+      >
+      <div class="sidebar-section">WORKSPACE</div>
+      <nav aria-label="Dashboard sections">
+        <a class="nav-active" href="#overview"
+          ><span aria-hidden="true">◈</span> Overview</a
+        ><a href="#performance"
+          ><span aria-hidden="true">▥</span> Model performance</a
+        ><a href="#request-log"
+          ><span aria-hidden="true">≡</span> Request log</a
+        >
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="privacy-icon" aria-hidden="true">⌁</div>
+        <strong>Local by design</strong>
+        <p>
+          Request and response bodies aren’t retained. Error excerpts stay
+          local.
+        </p>
+        <div class="sidebar-foot">CLAUDE CODE <span>→</span> CODEX</div>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">
+          Workspace <span>/</span> <strong>Observability</strong>
+        </div>
+        <div class="connection">
+          <i id="connection-dot"></i
+          ><span id="connection" role="status">Disconnected</span>
+        </div>
+      </header>
+      <main>
+        <section id="login" class="login-panel panel">
+          <div class="eyebrow">YOUR GATEWAY, IN FOCUS</div>
+          <h1>Connect to Claudex.</h1>
+          <p class="login-intro">
+            Understand traffic, latency, and token usage across your Claude Code
+            sessions.
+          </p>
+          <form id="login-form">
+            <label for="key">Local client key</label>
+            <div class="login-row">
+              <input
+                id="key"
+                type="password"
+                autocomplete="off"
+                required
+                spellcheck="false"
+                placeholder="Paste your local key"
+              /><button class="primary" type="submit">
+                Connect <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+          <p id="login-error" role="alert"></p>
+          <p class="fine-print">
+            Use the file configured by <code>client_key_file</code>. Your key
+            stays in this tab’s memory and is cleared on disconnect. Never enter
+            a Codex OAuth token.
+          </p>
+          <div class="login-features">
+            <span>● 120-minute traffic history</span
+            ><span>● 500 recent request records</span
+            ><span>● No external services</span>
+          </div>
+        </section>
+        <div id="usage" hidden>
+          <div class="page-heading" id="overview">
+            <div>
+              <div class="eyebrow">OBSERVABILITY</div>
+              <h1>Gateway overview<span class="local-badge">LOCAL</span></h1>
+              <p>One view of your models, requests, and token flow.</p>
+            </div>
+            <div class="heading-actions">
+              <button id="pause" class="button subtle" type="button">
+                Pause live</button
+              ><button id="disconnect" class="button" type="button">
+                Disconnect
+              </button>
+            </div>
+          </div>
+          <div id="stale" class="notice" role="status" hidden></div>
+          <div class="process-strip">
+            <span
+              ><i class="live-dot"></i><strong id="active">0</strong> in
+              flight</span
+            ><span
+              ><span class="muted">Uptime</span>
+              <strong id="uptime">—</strong></span
+            ><span
+              ><span class="muted">Quota recoveries</span>
+              <strong id="recoveries">0</strong></span
+            ><span
+              ><span class="muted">Canceled</span
+              ><strong id="total-canceled">0</strong></span
+            ><span class="process-updated" id="updated">Waiting for data</span>
+          </div>
+          <section class="kpi-grid" aria-label="Process lifetime metrics">
+            <article class="kpi panel">
+              <div class="kpi-label">
+                Completed requests
+                <span class="metric-icon" aria-hidden="true">↗</span>
+              </div>
+              <strong class="kpi-value" id="total-requests">0</strong>
+              <div class="kpi-detail">
+                <span id="success-rate">—</span> successful
+                <span class="kpi-scope">Since start</span>
+              </div>
+            </article>
+            <article class="kpi panel">
+              <div class="kpi-label">
+                Reported tokens
+                <span class="metric-icon" aria-hidden="true">◇</span>
+              </div>
+              <strong class="kpi-value" id="total-tokens">0</strong>
+              <div class="kpi-detail">
+                <span id="token-split">0 input · 0 output</span>
+              </div>
+            </article>
+            <article class="kpi panel">
+              <div class="kpi-label">
+                Input cache reuse
+                <span class="metric-icon" aria-hidden="true">↻</span>
+              </div>
+              <strong class="kpi-value" id="cache-ratio">—</strong>
+              <div class="kpi-detail">
+                <span id="cache-detail">No usage reported</span>
+              </div>
+            </article>
+            <article class="kpi panel">
+              <div class="kpi-label">
+                Request failures
+                <span class="metric-icon" aria-hidden="true">⌁</span>
+              </div>
+              <strong class="kpi-value" id="total-errors">0</strong>
+              <div class="kpi-detail">
+                <span id="error-detail">0 rate limited</span
+                ><span class="kpi-scope" id="error-rate">—</span>
+              </div>
+            </article>
+          </section>
+          <p class="rate-scope">
+            Success and failure rates exclude cancellations. Completed totals
+            include every outcome.
+          </p>
+          <div class="section-toolbar">
+            <div>
+              <h2>Traffic &amp; performance</h2>
+              <p id="window-description">
+                Minute buckets include every completed request.
+              </p>
+            </div>
+            <div class="segmented" role="group" aria-label="Chart time range">
+              <button type="button" data-window="15">15m</button
+              ><button
+                type="button"
+                data-window="60"
+                class="selected"
+                aria-pressed="true"
+              >
+                1h</button
+              ><button type="button" data-window="120">2h</button>
+            </div>
+          </div>
+          <div class="chart-grid">
+            <section class="panel chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Request traffic</h3>
+                  <p>Completed requests per minute</p>
+                </div>
+                <span class="panel-stat" id="window-requests">0 in window</span>
+              </div>
+              <div class="chart-legend">
+                <span><i class="teal"></i> Successful</span
+                ><span><i class="coral"></i> Failures</span
+                ><span><i class="canceled-color"></i> Canceled</span
+                ><span class="legend-note">Current minute is partial</span>
+              </div>
+              <div
+                id="traffic-chart"
+                class="chart wide-chart"
+                role="img"
+                aria-label="Completed request counts per minute"
+              ></div>
+              <p id="traffic-empty" class="chart-empty" hidden>
+                No requests yet. Your next Claude Code request will appear here.
+              </p>
+            </section>
+            <section class="panel chart-panel latency-panel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Response time</h3>
+                  <p id="latency-sample">Latest 500 requests in the window</p>
+                </div>
+                <span class="small-badge">SAMPLED</span>
+              </div>
+              <div class="latency-summary">
+                <div><span>P95 duration</span><strong id="p95">—</strong></div>
+                <div class="latency-side">
+                  <span>P50 <strong id="p50">—</strong></span
+                  ><span>P99 <strong id="p99">—</strong></span>
+                </div>
+              </div>
+              <div
+                id="latency-chart"
+                class="chart compact-chart"
+                role="img"
+                aria-label="Distribution of full request durations"
+              ></div>
+              <div class="first-output-row">
+                <div>
+                  <strong>First output <span>P50</span></strong>
+                  <p>First upstream text, reasoning, or tool delta</p>
+                </div>
+                <span id="first-output">—</span>
+              </div>
+              <p class="sample-footnote" id="first-sample">
+                Only requests with an observed output delta.
+              </p>
+            </section>
+            <section class="panel chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Token flow</h3>
+                  <p>Reported tokens per completion minute</p>
+                </div>
+                <span class="panel-stat" id="window-tokens">0 in window</span>
+              </div>
+              <div class="chart-legend">
+                <span><i class="teal"></i> Uncached input</span
+                ><span><i class="blue"></i> Cached input</span
+                ><span><i class="purple"></i> Output</span>
+              </div>
+              <div
+                id="tokens-chart"
+                class="chart wide-chart"
+                role="img"
+                aria-label="Reported uncached input, cached input, and output tokens per minute"
+              ></div>
+              <p class="panel-footnote" id="usage-coverage">
+                Usage is counted only when the upstream reports it.
+              </p>
+            </section>
+            <section class="panel chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Model &amp; effort mix</h3>
+                  <p>Completed requests in the selected sample</p>
+                </div>
+                <span class="small-badge">SAMPLED</span>
+              </div>
+              <div
+                id="mix-chart"
+                class="chart mix-chart"
+                role="img"
+                aria-label="Request counts by model and reasoning effort"
+              ></div>
+              <p class="panel-footnote">
+                Ultra harness requests appear as their wire effort, xhigh.
+              </p>
+            </section>
+          </div>
+          <section id="performance" class="panel table-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Model performance</h2>
+                <p>
+                  Totals since process start · failure rates exclude
+                  cancellations · latency from the selected sample
+                </p>
+              </div>
+              <span class="small-badge" id="model-count">0 MODELS</span>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Requests</th>
+                    <th>Canceled</th>
+                    <th>Failure rate</th>
+                    <th>Input tokens</th>
+                    <th>Cache reuse</th>
+                    <th>Output tokens</th>
+                    <th>P95 duration</th>
+                    <th>First output P50</th>
+                  </tr>
+                </thead>
+                <tbody id="models"></tbody>
+              </table>
+            </div>
+            <p id="models-empty" class="table-empty">
+              Model usage will appear after your first request.
+            </p>
+          </section>
+          <section id="request-log" class="panel table-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Request log</h2>
+                <p>
+                  Newest completions first. Expand failures or cancellations for
+                  details.
+                </p>
+              </div>
+              <span class="small-badge" id="retained-count"
+                >0 / 500 RETAINED</span
+              >
+            </div>
+            <div class="log-filters">
+              <label class="search-label"
+                ><span class="sr-only"
+                  >Search request ID, model, effort, status, or error
+                  details</span
+                ><input
+                  id="search"
+                  type="search"
+                  placeholder="Search model, status, error…"
+                  autocomplete="off" /></label
+              ><label
+                ><span class="sr-only">Filter model</span
+                ><select id="model-filter">
+                  <option value="all">All models</option>
+                </select></label
+              ><label
+                ><span class="sr-only">Filter reasoning effort</span
+                ><select id="effort-filter">
+                  <option value="all">All efforts</option>
+                </select></label
+              ><label
+                ><span class="sr-only">Filter status</span
+                ><select id="status-filter">
+                  <option value="all">All statuses</option>
+                  <option value="ok">Successful</option>
+                  <option value="errors">Failures</option>
+                  <option value="canceled">Canceled</option>
+                  <option value="429">Rate limited</option>
+                </select></label
+              >
+            </div>
+            <div class="table-scroll">
+              <table class="request-table">
+                <thead>
+                  <tr>
+                    <th>Request / started</th>
+                    <th>Model</th>
+                    <th>Effort</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>First output</th>
+                    <th>Input / output</th>
+                    <th>Cache reuse</th>
+                  </tr>
+                </thead>
+                <tbody id="recent"></tbody>
+              </table>
+            </div>
+            <p id="log-empty" class="table-empty" hidden>
+              No requests match these filters.
+            </p>
+            <div class="log-footer">
+              <span id="log-count">No requests</span>
+              <div>
+                <button id="previous" class="button subtle" type="button">
+                  ← Previous</button
+                ><span id="page-number">1 / 1</span
+                ><button id="next" class="button subtle" type="button">
+                  Next →
+                </button>
+              </div>
+            </div>
+          </section>
+          <footer>
+            <p>
+              <span class="footer-dot"></span> Metrics reset when Claudex
+              restarts. Last 120 minutes and 500 requests remain in memory.
+            </p>
+            <p>
+              Cached input is part of input; reasoning is part of output. Token
+              counts are usage, not billing or subscription quota.
+            </p>
+            <p id="process-started"></p>
+          </footer>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

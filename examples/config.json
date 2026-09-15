@@ -1,0 +1,9 @@
+{
+  "listen": "127.0.0.1:8317",
+  "auth_file": "/data/auth/codex.json",
+  "client_key_file": "/data/client-key",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "context_window": 1000000,
+  "compact_window": 900000
+}

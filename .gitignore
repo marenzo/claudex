@@ -1,0 +1,10 @@
+/dist/
+/claudex
+/config.json
+/auth.json
+/auth/
+/client-key
+/claude-settings.json
+*.log
+*.test
+.DS_Store
