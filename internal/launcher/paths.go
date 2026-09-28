@@ -45,33 +45,3 @@ func (p Paths) Command() string { return p.Wrapper("claudex") }
 func (p Paths) Wrapper(name string) string {
 	return filepath.Join(p.Bin, name)
 }
-
-// atomicWrite replaces path with data using a private temporary file.
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	cleanup := func(err error) error {
-		_ = temporary.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if _, err := temporary.Write(data); err != nil {
-		return cleanup(err)
-	}
-	if err := temporary.Chmod(mode); err != nil {
-		return cleanup(err)
-	}
-	if err := temporary.Close(); err != nil {
-		return cleanup(err)
-	}
-	if err := os.Rename(name, path); err != nil {
-		return cleanup(err)
-	}
-	return nil
-}

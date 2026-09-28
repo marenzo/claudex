@@ -24,21 +24,10 @@ type InstallOptions struct {
 }
 
 // Install copies the gateway into the user's state directory, writes the
-// config, the claudex command on PATH and launchd agent, then
-// starts the service. Every replaced file is backed up first; a failure
-// restores it.
-func Install(s *Service, opts InstallOptions) error {
-	// Reject malformed config before the lock creates any state.
-	if _, err := installConfig(s.Paths); err != nil {
-		return err
-	}
-	return WithControlLock(s.Paths, func() error { return install(s, opts) })
-}
-
-// InstallLocked is used by setup after it has locked initialization and sign-in.
-func InstallLocked(s *Service, opts InstallOptions) error { return install(s, opts) }
-
-func install(s *Service, opts InstallOptions) (err error) {
+// config, the claudex command on PATH and launchd agent, then starts the
+// service. Every replaced file is backed up first; a failure restores it.
+// Callers hold WithControlLock.
+func Install(s *Service, opts InstallOptions) (err error) {
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -104,10 +93,9 @@ func install(s *Service, opts InstallOptions) (err error) {
 		if errLoad != nil {
 			return errLoad
 		}
-		var release func()
-		release, err = s.Quiesce(ctx, oldConfig)
-		if err != nil {
-			return err
+		release, errStop := s.Shutdown(ctx, oldConfig)
+		if errStop != nil {
+			return errStop
 		}
 		defer release()
 	}
@@ -134,46 +122,38 @@ func install(s *Service, opts InstallOptions) (err error) {
 		}
 	}()
 
-	if running {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		if err = s.Stop(); err != nil {
-			return err
-		}
-		if err = ctx.Err(); err != nil {
-			return err
-		}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if _, errStat := os.Stat(cfg.ClientKeyFile); errStat != nil {
 		key := make([]byte, 36)
 		if _, err = rand.Read(key); err != nil {
 			return err
 		}
-		if err = atomicWrite(cfg.ClientKeyFile, []byte(base64.RawURLEncoding.EncodeToString(key)+"\n"), 0o600); err != nil {
+		if err = config.WriteFile(cfg.ClientKeyFile, []byte(base64.RawURLEncoding.EncodeToString(key)+"\n"), 0o600); err != nil {
 			return err
 		}
 	}
-	if err = atomicWrite(p.Binary(), binary, 0o755); err != nil {
+	if err = config.WriteFile(p.Binary(), binary, 0o755); err != nil {
 		return err
 	}
-	if err = atomicWrite(p.ConfigFile(), encodedConfig, 0o600); err != nil {
+	if err = config.WriteFile(p.ConfigFile(), encodedConfig, 0o600); err != nil {
 		return err
 	}
 	// Quote for the shell, not Go: double quotes still expand dollars and backticks.
 	quotedBinary := "'" + strings.ReplaceAll(p.Binary(), "'", "'\"'\"'") + "'"
 	command := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", quotedBinary)
-	if err = atomicWrite(p.Command(), []byte(command), 0o755); err != nil {
+	if err = config.WriteFile(p.Command(), []byte(command), 0o755); err != nil {
 		return err
 	}
 	if err = os.MkdirAll(filepath.Dir(p.LogFile()), 0o700); err != nil {
 		return err
 	}
 	encodedPlist := plist(p)
-	if err = atomicWrite(p.ServicePlist(), encodedPlist, 0o600); err != nil {
+	if err = config.WriteFile(p.ServicePlist(), encodedPlist, 0o600); err != nil {
 		return err
 	}
-	if err = atomicWrite(p.Agent, encodedPlist, 0o600); err != nil {
+	if err = config.WriteFile(p.Agent, encodedPlist, 0o600); err != nil {
 		return err
 	}
 	if !opts.NoStart {
@@ -254,7 +234,7 @@ func copyFile(from, to string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	return atomicWrite(to, data, mode)
+	return config.WriteFile(to, data, mode)
 }
 
 // exists reports whether an installed service file is present.

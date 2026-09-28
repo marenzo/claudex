@@ -159,7 +159,7 @@ func cmdSetup(args []string) error {
 			fmt.Println("Config ready. Start the foreground gateway with: claudex ctl run")
 			return nil
 		}
-		return launcher.InstallLocked(launcher.NewService(paths), launcher.InstallOptions{NoStart: *noStart, Context: ctx})
+		return launcher.Install(launcher.NewService(paths), launcher.InstallOptions{NoStart: *noStart, Context: ctx})
 	})
 }
 
@@ -192,17 +192,11 @@ func cmdService(name string, args []string) error {
 		ctx, cancel := signalContext()
 		defer cancel()
 		if service.Launchd.Loaded(launcher.Label) {
-			release, err := service.Quiesce(ctx, cfg)
+			release, err := service.Shutdown(ctx, cfg)
 			if err != nil {
 				return err
 			}
 			defer release()
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
-		if err := service.Stop(); err != nil {
-			return err
 		}
 	}
 	return service.Report(cfg)

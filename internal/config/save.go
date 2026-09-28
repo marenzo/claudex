@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -16,29 +15,35 @@ func Save(path string, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	return WriteFile(path, append(data, '\n'), 0o600)
+}
+
+// WriteFile replaces path with data using a private temporary file.
+func WriteFile(path string, data []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".config-")
+	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+	name := temporary.Name()
+	cleanup := func(err error) error {
+		_ = temporary.Close()
+		_ = os.Remove(name)
 		return err
 	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
+	if _, err := temporary.Write(data); err != nil {
+		return cleanup(err)
 	}
-	if err := tmp.Close(); err != nil {
-		return err
+	if err := temporary.Chmod(mode); err != nil {
+		return cleanup(err)
 	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("replace config: %w", err)
+	if err := temporary.Close(); err != nil {
+		return cleanup(err)
+	}
+	if err := os.Rename(name, path); err != nil {
+		return cleanup(err)
 	}
 	return nil
 }

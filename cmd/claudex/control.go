@@ -48,9 +48,7 @@ func cmdOverview(args []string) error {
 	if *jsonOutput {
 		out := map[string]any{"version": buildVersion(), "checks": checks}
 		if cfgErr == nil {
-			reviewer, _ := preference(cfg, "reviewer")
-			out["preferences"] = map[string]any{"model": cfg.Model, "effort": cfg.ReasoningEffort,
-				"reviewer": reviewer, "dashboard": cfg.Dashboard}
+			out["preferences"] = preferences(cfg)
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
@@ -68,8 +66,7 @@ func cmdOverview(args []string) error {
 			}
 		}
 		if cfgErr == nil {
-			fmt.Printf("Default        %s · %s\nReviewer       %s\nDashboard      %t\n",
-				cfg.Model, cfg.ReasoningEffort, reviewerName(cfg), cfg.Dashboard)
+			printPreferences(cfg)
 		}
 		fmt.Println("Actions: config · setup · logs · restart")
 	}

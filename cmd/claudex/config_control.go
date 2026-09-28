@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -39,9 +40,7 @@ func cmdConfig(args []string) error {
 		return err
 	}
 	if *jsonOutput {
-		reviewer, _ := preference(cfg, "reviewer")
-		return json.NewEncoder(os.Stdout).Encode(map[string]any{"model": cfg.Model, "effort": cfg.ReasoningEffort,
-			"reviewer": reviewer, "dashboard": cfg.Dashboard})
+		return json.NewEncoder(os.Stdout).Encode(preferences(cfg))
 	}
 	if set.NArg() == 0 {
 		printPreferences(cfg)
@@ -67,29 +66,32 @@ func cmdConfig(args []string) error {
 }
 
 func printPreferences(cfg config.Config) {
-	fmt.Printf("Model       %s\nEffort      %s\nReviewer    %s\nDashboard   %t\n",
-		cfg.Model, cfg.ReasoningEffort, reviewerName(cfg), cfg.Dashboard)
+	fmt.Printf("%-14s %s\n%-14s %s\n%-14s %s\n%-14s %t\n", "Model", cfg.Model,
+		"Effort", cfg.ReasoningEffort, "Reviewer", reviewerName(cfg), "Dashboard", cfg.Dashboard)
+}
+
+var errPreferenceKey = usageError{"choose model, effort, reviewer, or dashboard"}
+
+// preferences lists the settings claudex ctl config reads and changes.
+func preferences(cfg config.Config) map[string]any {
+	reviewer := cfg.AutoModeClassifierModel
+	if reviewer == "" {
+		reviewer = "client"
+	}
+	return map[string]any{"model": cfg.Model, "effort": cfg.ReasoningEffort, "reviewer": reviewer, "dashboard": cfg.Dashboard}
 }
 
 func preference(cfg config.Config, key string) (string, error) {
-	switch key {
-	case "model":
-		return cfg.Model, nil
-	case "effort":
-		return cfg.ReasoningEffort, nil
-	case "reviewer":
-		if cfg.AutoModeClassifierModel == "" {
-			return "client", nil
-		}
-		return cfg.AutoModeClassifierModel, nil
-	case "dashboard":
-		if cfg.Dashboard {
-			return "on", nil
-		}
-		return "off", nil
-	default:
-		return "", usageError{"choose model, effort, reviewer, or dashboard"}
+	value, ok := preferences(cfg)[key]
+	if !ok {
+		return "", errPreferenceKey
 	}
+	if on, isBool := value.(bool); isBool && on {
+		return "on", nil
+	} else if isBool {
+		return "off", nil
+	}
+	return value.(string), nil
 }
 
 func changedPreference(cfg config.Config, key, value string) (config.Config, error) {
@@ -122,7 +124,7 @@ func changedPreference(cfg config.Config, key, value string) (config.Config, err
 			return cfg, usageError{"dashboard must be on or off"}
 		}
 	default:
-		return cfg, usageError{"choose model, effort, reviewer, or dashboard"}
+		return cfg, errPreferenceKey
 	}
 	return cfg, cfg.Validate()
 }
@@ -166,10 +168,6 @@ func editConfig(path string) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
 	if _, err := tmp.Write(previous); err != nil {
 		tmp.Close()
 		return err
@@ -193,7 +191,7 @@ func editConfig(path string) error {
 	if err != nil {
 		return err
 	}
-	if string(updated) == string(previous) {
+	if bytes.Equal(updated, previous) {
 		fmt.Println("No changes.")
 		return nil
 	}

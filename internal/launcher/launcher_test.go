@@ -61,7 +61,7 @@ func gateway(t *testing.T, key string) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "gpt-6-astra"}, {"id": "gpt-5.6-luna"}}})
 		case "/_claudex/status":
 			revision, _ := gatewayRevisions.Load(r.Host)
-			_ = json.NewEncoder(w).Encode(map[string]any{"version": "test", "revision": revision, "active": 0, "dashboard": false})
+			_ = json.NewEncoder(w).Encode(map[string]any{"revision": revision, "dashboard": false})
 		case "/_claudex/drain":
 			if r.Method == http.MethodDelete {
 				w.WriteHeader(http.StatusNoContent)

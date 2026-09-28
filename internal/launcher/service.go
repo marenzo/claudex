@@ -2,13 +2,11 @@ package launcher
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/marenzo/claudex/internal/auth"
@@ -47,17 +45,11 @@ var ErrUnauthorized = errors.New("the configured port rejected this installation
 func (s *Service) SignIn(ctx context.Context, cfg config.Config, noBrowser bool) error {
 	running := s.Launchd.Loaded(Label)
 	if running {
-		release, err := s.Quiesce(ctx, cfg)
+		release, err := s.Shutdown(ctx, cfg)
 		if err != nil {
 			return err
 		}
 		defer release()
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := s.Stop(); err != nil {
-			return err
-		}
 	}
 	errLogin := s.Login(ctx, cfg, noBrowser, s.Out)
 	if running {
@@ -134,34 +126,10 @@ func (s *Service) Start(cfg config.Config) ([]string, error) {
 	return nil, fmt.Errorf("gateway did not become ready; inspect %s.%s", s.Paths.LogFile(), detail)
 }
 
-func (s *Service) get(cfg config.Config, path string, into any) error {
-	key, err := os.ReadFile(cfg.ClientKeyFile)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest(http.MethodGet, "http://"+cfg.Listen+path, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(key)))
-	resp, err := s.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return ErrUnauthorized
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s returned HTTP %d", path, resp.StatusCode)
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(into)
-}
-
 // Health verifies that the configured port serves a healthy Claudex gateway.
 func (s *Service) Health(cfg config.Config) error {
 	var result struct{ Status, Product, Version string }
-	if err := s.get(cfg, "/healthz", &result); err != nil {
+	if err := s.control(context.Background(), cfg, http.MethodGet, "/healthz", "", &result); err != nil {
 		return err
 	}
 	if result.Status != "ok" || result.Product != "claudex" || result.Version == "" {
@@ -177,7 +145,7 @@ func (s *Service) Models(cfg config.Config) ([]string, error) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := s.get(cfg, "/v1/models", &result); err != nil {
+	if err := s.control(context.Background(), cfg, http.MethodGet, "/v1/models", "", &result); err != nil {
 		return nil, err
 	}
 	ids := make([]string, 0, len(result.Data))
