@@ -26,12 +26,13 @@ import (
 const maxRequestBytes = 64 * 1024 * 1024
 
 type Server struct {
-	Config  config.Config
-	Client  *codex.Client
-	Quota   quota.State
-	key     []byte
-	version string
-	metrics *dashboard.Store
+	Config          config.Config
+	Client          *codex.Client
+	Quota           quota.State
+	key             []byte
+	version         string
+	metrics         *dashboard.Store
+	classifierSlots chan struct{}
 }
 
 func New(cfg config.Config, client *codex.Client, version string) (*Server, error) {
@@ -43,7 +44,7 @@ func New(cfg config.Config, client *codex.Client, version string) (*Server, erro
 	if len(key) < 24 {
 		return nil, fmt.Errorf("local client key must contain at least 24 characters")
 	}
-	return &Server{Config: cfg, Client: client, key: key, version: version}, nil
+	return &Server{Config: cfg, Client: client, key: key, version: version, classifierSlots: make(chan struct{}, 4)}, nil
 }
 
 // EnableDashboard must be called before serving requests. Disabled by default.
@@ -239,6 +240,20 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		fail(errRead)
 		return
 	}
+	review, errReview := newSafeguardReview(raw, s.Config)
+	if errReview != nil {
+		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errReview.Error()})
+		return
+	}
+	if review != nil {
+		select {
+		case s.classifierSlots <- struct{}{}:
+			defer func() { <-s.classifierSlots }()
+		default:
+			fail(&apiError{Status: 429, Type: "rate_limit_error", Message: "Auto-mode review capacity exhausted; retry later."})
+			return
+		}
+	}
 	body, session, errPrepare := prepareRequest(raw, s.Config)
 	if errPrepare != nil {
 		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errPrepare.Error()})
@@ -305,7 +320,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stream := gjson.GetBytes(raw, "stream").Bool()
-	status = s.consume(w, r, response.Body, raw, body, credential.AccountID, stream, &record, inputTokens)
+	status = s.consume(w, r, response.Body, raw, body, credential.AccountID, stream, &record, inputTokens, review)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

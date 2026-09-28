@@ -46,6 +46,12 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            strconv.Itoa(cfg.CompactWindow),
 		"API_TIMEOUT_MS":                             "600000",
 	}
+	// Client-side auto mode remains available when the experimental server
+	// classifier is disabled. This setting does not disable permission checks.
+	env["CLAUDE_CODE_AUTO_MODE_SERVER"] = "0"
+	if cfg.AutoModeClassifierModel != "" {
+		env["CLAUDE_CODE_AUTO_MODE_SERVER"] = "1"
+	}
 	for family, alias := range Families {
 		target, _ := config.FindModel(alias)
 		env["ANTHROPIC_DEFAULT_"+family+"_MODEL"] = target.ID

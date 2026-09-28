@@ -3,6 +3,10 @@
 Claudex translates between two protocols. It cannot make their capabilities
 identical.
 
+Auto mode can use Claude Code's client-side classifier or the opt-in
+[experimental GPT server classifier](auto-mode.md). Neither gives this gateway
+Anthropic's no-charge classifier service; classification consumes Codex usage.
+
 - **Unofficial subscription integration.** OpenAI and Anthropic do not endorse
   Claudex. Using a Codex subscription through a third-party client may breach
   OpenAI's terms of use. The gateway presents itself upstream as the Codex CLI.

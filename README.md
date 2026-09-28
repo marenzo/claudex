@@ -89,6 +89,7 @@ GOOS=linux GOARCH=arm64 make build
 - [Architecture and request flow](docs/architecture.md)
 - [Dashboard metrics and privacy](docs/dashboard.md)
 - [Limitations and troubleshooting](docs/limitations.md)
+- [Experimental GPT auto-mode classifier](docs/auto-mode.md)
 - [Development, checks, and releases](docs/development.md)
 
 ## License

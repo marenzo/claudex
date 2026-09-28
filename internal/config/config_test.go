@@ -14,6 +14,8 @@ func TestConfigValidation(t *testing.T) {
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k"}`, true},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","reasoning_effort":"ultra"}`, true},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","reasoning_effort":"max"}`, true},
+		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","auto_mode_classifier_model":"astra"}`, true},
+		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","auto_mode_classifier_model":"unknown"}`, false},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","listen":"0.0.0.0:8317"}`, false},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","listen":"127.0.0.1:1"}`, true},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","listen":"[::1]:65535"}`, true},
