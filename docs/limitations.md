@@ -57,24 +57,24 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   setups such as Docker. Dashboard error excerpts can contain text echoed by the
   upstream server; see [dashboard privacy](dashboard.md#privacy-and-retention).
   launchd does not rotate the service log, so manage its size on long-running hosts.
-- **Platform support.** `claudex setup`, `install`, `start`, `stop`, `restart`,
-  `launch`, and `uninstall` are macOS only. Linux uses `claudex run` or Docker. Releases target Linux and macOS on
+- **Platform support.** The managed `claudex` launcher and `ctl start`, `stop`,
+  `restart`, and `uninstall` are macOS only. Linux uses `claudex ctl run` or Docker. Releases target Linux and macOS on
   amd64 and arm64. Windows is not packaged. macOS binaries are not signed or
   notarized.
 
 ## Troubleshooting
 
-**Start with `claudex status`.** It checks the config, client key, Codex sign-in,
+**Start with `claudex ctl`.** It checks the config, client key, Codex sign-in,
 gateway, macOS service, and Claude Code without changing anything. Fix the first
 `fail` line before trying anything else. See
 [checking an installation](running.md#check-an-installation).
 
 **Invalid client key.** Claude Code sent a missing or wrong client key. The gateway
 logs `request rejected` with `reason` `invalid_client_key`. Use the value in
-`client_key_file`, never a Codex token. On macOS, start a new `claudex launch` session.
+`client_key_file`, never a Codex token. On macOS, start a new `claudex` session.
 Otherwise check `ANTHROPIC_AUTH_TOKEN`.
 
-**A model is unavailable or rate-limited.** Check `claudex status` and pick
+**A model is unavailable or rate-limited.** Check `claudex ctl` and pick
 a model your account can use. All requests share one subscription. You may need to
 wait for upstream quota to recover. Restarting does not create quota.
 
@@ -85,19 +85,19 @@ status and error code. Overload does not start a quota cooldown. The gateway doe
 not replay a partially delivered response.
 
 **Not signed in to Codex.** Requests fail with 401, and the gateway logs a WARN
-`Codex sign-in unavailable` at startup. Run `claudex login`. The service manager
+`Codex sign-in unavailable` at startup. Run `claudex ctl setup --login`. The service manager
 stops the service before sign-in to avoid racing a token refresh. Port 1455 must be
 free for the browser callback.
 
 **Codex sign-in could not be used or refreshed.** The sign-in exists, but the
 gateway could not use it or refresh it. Retry once. If the error continues, run
-`claudex login`. Client messages contain no file paths. The service log records
+`claudex ctl setup --login`. Client messages contain no file paths. The service log records
 the underlying error.
 
 **The Codex sign-in switched to a different account.** A refresh during the request
 returned another account, so the gateway did not retry it. Retry the request.
 
-**The old model mapping is still used.** Start a fresh `claudex launch` session.
+**The old model mapping is still used.** Start a fresh `claudex` session.
 Existing sessions can keep environment values that already resolved a family name.
 
 **Codex stream was interrupted.** The gateway could not read the upstream response
@@ -116,8 +116,8 @@ The dashboard shows request duration and usage, but it does not label compaction
 requests. The default compaction window is 900,000 tokens. You can lower it; see
 [compaction window](configuration.md#compaction-window).
 
-**Dashboard returns 404.** Start the gateway with `-dashboard`, or reinstall the
-macOS service with `claudex install -dashboard`. Sign in to the dashboard with the
+**Dashboard returns 404.** Run `claudex ctl config dashboard on` for the macOS
+service, or start a foreground gateway with `claudex ctl run -dashboard`. Sign in with the
 key in `client_key_file`, not with the Codex sign-in. The page cannot fetch the key
 for you.
 

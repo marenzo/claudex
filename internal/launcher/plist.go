@@ -9,11 +9,8 @@ import (
 const searchPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 // plist renders the launchd agent property list.
-func plist(p Paths, dashboard bool) []byte {
-	arguments := []string{p.Binary(), "run", "-config", p.ConfigFile()}
-	if dashboard {
-		arguments = append(arguments, "-dashboard")
-	}
+func plist(p Paths) []byte {
+	arguments := []string{p.Binary(), "ctl", "run", "-config", p.ConfigFile()}
 	var b bytes.Buffer
 	str := func(s string) string {
 		var escaped bytes.Buffer

@@ -3,7 +3,7 @@
 # healthy, then idle so the test can drive `claude` with docker exec.
 set -eu
 mkdir -p "$HOME"
-claudex run -config /data/config.json &
+claudex ctl run -config /data/config.json &
 gateway=$!
 for _ in $(seq 1 100); do
   if curl -fsS -o /dev/null http://127.0.0.1:8317/healthz; then

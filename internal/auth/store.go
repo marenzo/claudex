@@ -45,7 +45,7 @@ func NewStore(path string) *Store {
 
 // ErrNotSignedIn reports a missing, malformed, disabled, or incomplete Codex
 // sign-in. Signing in again fixes it.
-var ErrNotSignedIn = errors.New("not signed in to Codex; run claudex login")
+var ErrNotSignedIn = errors.New("not signed in to Codex; run claudex ctl setup --login")
 
 // Check reports whether a usable sign-in exists, without refreshing it, and the
 // access token expiry when the credential records one.
@@ -122,7 +122,7 @@ func (s *Store) Refresh(ctx context.Context, usedToken string) (Credential, erro
 
 func (s *Store) refresh(ctx context.Context, c Credential, fields map[string]json.RawMessage) (Credential, error) {
 	if c.RefreshToken == "" {
-		return c, fmt.Errorf("expired Codex sign-in; run claudex login")
+		return c, fmt.Errorf("expired Codex sign-in; run claudex ctl setup --login")
 	}
 	form := url.Values{"client_id": {ClientID}, "grant_type": {"refresh_token"}, "refresh_token": {c.RefreshToken}, "scope": {"openid profile email"}}
 	return s.exchange(ctx, form, fields)
@@ -147,7 +147,7 @@ func (s *Store) exchange(ctx context.Context, form url.Values, fields map[string
 		}
 	}()
 	if resp.StatusCode != http.StatusOK {
-		return Credential{}, fmt.Errorf("token exchange with Codex returned HTTP %d; run claudex login if sign-in has expired", resp.StatusCode)
+		return Credential{}, fmt.Errorf("token exchange with Codex returned HTTP %d; run claudex ctl setup --login if sign-in has expired", resp.StatusCode)
 	}
 	var token struct {
 		AccessToken  string `json:"access_token"`

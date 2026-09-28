@@ -1,15 +1,11 @@
 // Package launcher installs and manages the macOS user service and starts
-// Claude Code against the local gateway. It replaces the former Python scripts.
+// Claude Code against the local gateway.
 package launcher
 
 import (
 	"os"
 	"path/filepath"
 )
-
-// legacyLauncher is the launcher older releases installed on PATH. Install and
-// Uninstall remove it; claudex launch replaces it.
-const legacyLauncher = "claude-gpt"
 
 // Label is the launchd service label.
 const Label = "local.claudex.proxy"
@@ -40,7 +36,6 @@ func DefaultPaths() (Paths, error) {
 
 func (p Paths) Binary() string       { return filepath.Join(p.State, "bin", "claudex") }
 func (p Paths) ConfigFile() string   { return filepath.Join(p.Config, "config.json") }
-func (p Paths) SettingsFile() string { return filepath.Join(p.Config, "claude-settings.json") }
 func (p Paths) ServicePlist() string { return filepath.Join(p.State, "service.plist") }
 func (p Paths) LogFile() string      { return filepath.Join(p.State, "logs", "service.log") }
 func (p Paths) Backups() string      { return filepath.Join(p.State, "backups") }

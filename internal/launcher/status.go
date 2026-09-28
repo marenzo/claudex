@@ -16,7 +16,7 @@ import (
 	"github.com/marenzo/claudex/internal/config"
 )
 
-// Check levels reported by claudex status. Only LevelFail makes the command
+// Check levels reported by claudex ctl. Only LevelFail makes the command
 // exit with a non-zero status.
 const (
 	LevelOK   = "ok"
@@ -24,11 +24,11 @@ const (
 	LevelFail = "fail"
 )
 
-// Check is one line of claudex status output.
+// Check is one line of detailed claudex ctl output.
 type Check struct {
-	Level  string
-	Name   string
-	Detail string
+	Level  string `json:"level"`
+	Name   string `json:"name"`
+	Detail string `json:"detail"`
 }
 
 // Status inspects an installation without changing anything.
@@ -106,7 +106,7 @@ func (s *Status) gateway(cfg config.Config) []Check {
 	}
 	resp, err := get("/healthz")
 	if err != nil {
-		return []Check{{LevelWarn, "gateway", fmt.Sprintf("not answering at %s; start it with claudex run or claudex start", base)}}
+		return []Check{{LevelWarn, "gateway", fmt.Sprintf("not answering at %s; start it with claudex ctl run or claudex ctl start", base)}}
 	}
 	var health struct{ Product, Status, Version string }
 	errDecode := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&health)
@@ -131,12 +131,12 @@ func (s *Status) gateway(cfg config.Config) []Check {
 
 func (s *Status) service() Check {
 	if _, err := os.Stat(s.Paths.Agent); err != nil {
-		return Check{LevelOK, "macos service", "not installed; claudex install sets it up"}
+		return Check{LevelOK, "macos service", "not installed; claudex ctl setup sets it up"}
 	}
 	if s.Launchd.Loaded(Label) {
 		return Check{LevelOK, "macos service", "installed and loaded"}
 	}
-	return Check{LevelWarn, "macos service", "installed but not loaded; run claudex start"}
+	return Check{LevelWarn, "macos service", "installed but not loaded; run claudex ctl start"}
 }
 
 func (s *Status) claude() Check {
@@ -147,7 +147,7 @@ func (s *Status) claude() Check {
 	if info, err := os.Stat(native); err == nil && info.Mode().Perm()&0o111 != 0 {
 		return Check{LevelOK, "claude code", native}
 	}
-	return Check{LevelWarn, "claude code", "claude is not on PATH; install Claude Code to use claudex launch"}
+	return Check{LevelWarn, "claude code", "claude is not on PATH; install Claude Code to use claudex"}
 }
 
 // PrintChecks writes aligned check lines and reports whether any check failed.

@@ -20,4 +20,4 @@ VOLUME /data
 EXPOSE 8317
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -q -O /dev/null http://127.0.0.1:8317/healthz || exit 1
 ENTRYPOINT ["/usr/local/bin/claudex"]
-CMD ["run", "-config", "/data/config.json", "-listen", "0.0.0.0:8317"]
+CMD ["ctl", "run", "-config", "/data/config.json", "-listen", "0.0.0.0:8317"]

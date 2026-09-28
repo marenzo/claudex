@@ -27,7 +27,7 @@ func TestConfigValidation(t *testing.T) {
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","listen":"[::1%lo0]:8317"}`, false},
 		{`{"auth_file":"relative","client_key_file":"/tmp/k"}`, false},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","compact_window":1000000}`, false},
-		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","dashboard":true}`, false},
+		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","dashboard":true}`, true},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k"} {}`, false},
 	} {
 		p := filepath.Join(t.TempDir(), "config.json")

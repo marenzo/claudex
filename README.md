@@ -24,22 +24,23 @@ need at runtime. Both the archive and source build place it at `dist/claudex`.
 ### macOS
 
 ```sh
-./dist/claudex setup              # init + login + install the launchd service
+./dist/claudex ctl setup          # sign in and install the macOS service
 export PATH="$HOME/.local/bin:$PATH"
-claudex launch                    # start Claude Code through the gateway
+claudex                           # start Claude Code through the gateway
 ```
 
-`setup` is the same as running `claudex init`, `claudex login`, and
-`claudex install` in turn.
+A bare `claudex` in a terminal can also guide first-time setup. Claude options
+pass straight through: `claudex --resume`, `claudex -p "hello"`, and
+`claudex --model astra` all use the local gateway. Run `claudex ctl` for a short
+health and preferences overview.
 
 ### Linux
 
 The service installer is macOS-only. Run the gateway in the foreground instead:
 
 ```sh
-./dist/claudex init
-./dist/claudex login
-./dist/claudex run
+./dist/claudex ctl setup
+./dist/claudex ctl run
 ```
 
 Then point Claude Code at it from a second terminal with the environment shown in
@@ -62,14 +63,15 @@ Each Claude model family maps to a GPT model:
 The default is Astra with `high` effort. Override either per session:
 
 ```sh
-claudex launch --model sol
-claudex launch --effort max
+claudex --model sol
+claudex --effort max
 ```
 
 To change the defaults, edit `model` and `reasoning_effort` in the config, then
 [apply the changes](docs/configuration.md#applying-changes). See
 [valid values](docs/configuration.md#valid-values) for every model name and effort
-level. `claudex status` checks the whole setup without changing it.
+level. `claudex ctl config` changes defaults directly, and `claudex ctl` checks
+the setup without changing it.
 
 ## Build from source
 

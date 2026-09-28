@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,34 +46,39 @@ func (l *Launcher) Run(args []string) error {
 		return errors.New("install Claude Code first and put its claude executable on PATH")
 	}
 	args = RewriteArgs(args)
-	if len(args) == 1 {
-		switch args[0] {
-		case "--help", "-h", "--version", "-v":
-			return l.Exec(claude, append([]string{claude}, args...), l.Environ())
-		}
+	if nativeClaudeCommand(args) {
+		return l.Exec(claude, append([]string{claude}, args...), l.Environ())
 	}
 	p := l.Service.Paths
-	if !exists(p.SettingsFile()) {
-		return errors.New("install the launcher settings first: claudex install")
+	if goos != "darwin" {
+		return errors.New("the Claude launcher uses the macOS service; on this platform start claudex ctl run and connect Claude Code using the documented environment")
 	}
 	cfg, err := config.Load(p.ConfigFile())
 	if err != nil {
-		return fmt.Errorf("cannot read gateway settings at %s; rerun claudex install: %w", p.ConfigFile(), err)
+		return fmt.Errorf("cannot read gateway settings at %s; run claudex ctl setup: %w", p.ConfigFile(), err)
+	}
+	if !exists(p.ServicePlist()) {
+		return errors.New("the macOS service is not installed; run claudex ctl setup")
+	}
+	settings, err := Settings(cfg)
+	if err != nil {
+		return err
+	}
+	settingsJSON, err := json.Marshal(settings)
+	if err != nil {
+		return err
 	}
 	quiet := *l.Service
 	quiet.Out = io.Discard
 	if _, err := quiet.Start(cfg); err != nil {
 		return err
 	}
-	raw, err := os.ReadFile(p.SettingsFile())
+	control, err := quiet.ReadControl(context.Background(), cfg)
 	if err != nil {
 		return err
 	}
-	var settings struct {
-		Env map[string]string `json:"env"`
-	}
-	if err := json.Unmarshal(raw, &settings); err != nil {
-		return fmt.Errorf("invalid %s; rerun claudex install: %w", p.SettingsFile(), err)
+	if control.Revision != Revision(cfg) {
+		return errors.New("gateway settings differ from the config; run claudex ctl restart")
 	}
 	key, err := os.ReadFile(cfg.ClientKeyFile)
 	if err != nil {
@@ -95,6 +101,25 @@ func (l *Launcher) Run(args []string) error {
 	for name, value := range env {
 		environ = append(environ, name+"="+value)
 	}
-	argv := append([]string{claude, "--disallowedTools", "Artifact", "--settings", p.SettingsFile()}, args...)
+	argv := append([]string{claude, "--disallowedTools", "Artifact", "--settings", string(settingsJSON)}, args...)
 	return l.Exec(claude, argv, environ)
+}
+
+// These Claude commands manage its own installation or local state. They work
+// even when Claudex has not been configured or its gateway is unavailable.
+func nativeClaudeCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	if len(args) == 1 {
+		switch args[0] {
+		case "--help", "-h", "--version", "-v":
+			return true
+		}
+	}
+	switch args[0] {
+	case "auth", "doctor", "gateway", "import", "install", "logs", "mcp", "plugin", "plugins", "project", "rm", "setup-token", "stop", "kill", "update", "upgrade":
+		return true
+	}
+	return false
 }

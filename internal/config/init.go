@@ -15,7 +15,7 @@ import (
 var ErrExists = errors.New("config already exists")
 
 // Initialize creates a private configuration without replacing an existing login,
-// key, or config. OAuth credentials are created later by claudex login.
+// key, or config. OAuth credentials are created later by claudex ctl setup.
 func Initialize(path string) error {
 	absolute, err := filepath.Abs(path)
 	if err != nil {

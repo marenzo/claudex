@@ -47,6 +47,14 @@ var ErrUnauthorized = errors.New("the configured port rejected this installation
 func (s *Service) SignIn(ctx context.Context, cfg config.Config, noBrowser bool) error {
 	running := s.Launchd.Loaded(Label)
 	if running {
+		release, err := s.Drain(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		defer release()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := s.Stop(); err != nil {
 			return err
 		}
@@ -72,7 +80,7 @@ func (s *Service) Report(cfg config.Config) error {
 	}
 	fmt.Fprintf(s.Out, "Claudex ready at http://%s; %d models. Authentication: Codex subscription.\n", cfg.Listen, len(models))
 	if _, err := os.Stat(cfg.AuthFile); err != nil {
-		fmt.Fprintln(s.Out, "Complete sign-in with: claudex login")
+		fmt.Fprintln(s.Out, "Complete sign-in with: claudex ctl setup --login")
 	}
 	return nil
 }
