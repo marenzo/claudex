@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 )
 
+// legacyLauncher is the launcher older releases installed on PATH. Install and
+// Uninstall remove it; claudex launch replaces it.
+const legacyLauncher = "claude-gpt"
+
 // Label is the launchd service label.
 const Label = "local.claudex.proxy"
 
@@ -40,6 +44,9 @@ func (p Paths) SettingsFile() string { return filepath.Join(p.Config, "claude-se
 func (p Paths) ServicePlist() string { return filepath.Join(p.State, "service.plist") }
 func (p Paths) LogFile() string      { return filepath.Join(p.State, "logs", "service.log") }
 func (p Paths) Backups() string      { return filepath.Join(p.State, "backups") }
+
+// Command is the claudex shim on PATH that runs the installed binary.
+func (p Paths) Command() string { return p.Wrapper("claudex") }
 func (p Paths) Wrapper(name string) string {
 	return filepath.Join(p.Bin, name)
 }

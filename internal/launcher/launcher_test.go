@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -164,7 +165,7 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper("claude-gpt")
+	previous := s.Paths.Wrapper(legacyLauncher)
 	if err := os.WriteFile(previous, []byte("previous launcher"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -193,9 +194,12 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	if !strings.Contains(string(plist), "<string>-dashboard</string>") || !strings.Contains(string(plist), Label) {
 		t.Errorf("plist:\n%s", plist)
 	}
-	wrapper, _ := os.ReadFile(s.Paths.Wrapper("claude-gpt"))
-	if !strings.Contains(string(wrapper), s.Paths.Binary()+`" launch "$@"`) {
-		t.Errorf("wrapper:\n%s", wrapper)
+	command, _ := os.ReadFile(s.Paths.Command())
+	if !strings.Contains(string(command), s.Paths.Binary()+`' "$@"`) {
+		t.Errorf("command:\n%s", command)
+	}
+	if _, err := os.Stat(previous); !os.IsNotExist(err) {
+		t.Errorf("legacy launcher left behind: %v", err)
 	}
 	if !reflect.DeepEqual(launchd.calls, []string{"bootstrap " + s.Paths.ServicePlist()}) {
 		t.Errorf("launchd calls %v", launchd.calls)
@@ -237,6 +241,28 @@ func TestInstallFreshCreatesKeyAndSkipsStart(t *testing.T) {
 	}
 }
 
+func TestInstalledCommandPreservesPathArgumentsAndExitStatus(t *testing.T) {
+	s, _ := testService(t)
+	s.Paths.State = filepath.Join(t.TempDir(), "state with 'quotes' $CLAUDEX_SHIM_TEST `false` $(false)")
+	t.Setenv("CLAUDEX_SHIM_TEST", "expanded")
+	source := filepath.Join(t.TempDir(), "claudex")
+	if err := os.WriteFile(source, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\nexit 23\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(s, InstallOptions{Source: source, NoStart: true}); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"launch", "--model", "sol", "two words", "", "$(false)", "'quoted'"}
+	out, err := exec.Command(s.Paths.Command(), args...).CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 23 {
+		t.Fatalf("command exit: %v; output: %s", err, out)
+	}
+	if want := strings.Join(args, "\n") + "\n"; string(out) != want {
+		t.Errorf("arguments = %q, want %q", out, want)
+	}
+}
+
 func TestInstallRejectsInvalidConfigBeforeChangingFiles(t *testing.T) {
 	s, _ := testService(t)
 	if err := os.MkdirAll(s.Paths.Config, 0o700); err != nil {
@@ -260,7 +286,7 @@ func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper("claude-gpt")
+	previous := s.Paths.Wrapper(legacyLauncher)
 	if err := os.WriteFile(previous, []byte("old launcher"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +306,7 @@ func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	if data, _ := os.ReadFile(s.Paths.Agent); string(data) != "old plist" {
 		t.Errorf("agent not restored: %q", data)
 	}
-	for _, path := range []string{filepath.Join(s.Paths.Config, "client-key"), s.Paths.SettingsFile()} {
+	for _, path := range []string{filepath.Join(s.Paths.Config, "client-key"), s.Paths.SettingsFile(), s.Paths.Command()} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}
@@ -302,7 +328,7 @@ func TestUninstallRemovesServiceAndKeepsCredentials(t *testing.T) {
 	if !reflect.DeepEqual(launchd.calls, []string{"bootout"}) {
 		t.Errorf("calls %v", launchd.calls)
 	}
-	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.SettingsFile(), s.Paths.Wrapper("claude-gpt"), s.Paths.Agent} {
+	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.SettingsFile(), s.Paths.Command(), s.Paths.Agent} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}

@@ -6,14 +6,15 @@ Linux and macOS run the Go gateway directly. Download the archive for your
 platform from the [GitHub releases](https://github.com/marenzo/claudex/releases)
 and unpack it. You can also build from source with
 `make build`, which writes `dist/claudex`. The single `claudex` binary is all you
-need at runtime.
+need at runtime. Both options place it at `dist/claudex`; use that path until
+you have installed the command on PATH.
 
 ```sh
-claudex init
-claudex login
-claudex run                      # foreground; Ctrl-C stops it
+./dist/claudex init
+./dist/claudex login
+./dist/claudex run               # foreground; Ctrl-C stops it
 # Or enable the optional dashboard:
-claudex run -dashboard
+./dist/claudex run -dashboard
 ```
 
 `init` creates a private config and a random client key. It never overwrites an
@@ -23,7 +24,7 @@ and `status`.
 `login -no-browser` prints the sign-in URL for you to open. The browser callback
 must reach `127.0.0.1:1455` on the machine running Claudex.
 
-On macOS, `claudex install` and `claude-gpt` apply every launcher setting. With a
+On macOS, `claudex install` and `claudex launch` apply every launcher setting. With a
 foreground gateway on Linux, set this environment in a second terminal and run the
 installed Claude CLI:
 
@@ -114,14 +115,15 @@ claudex restart
 claudex status
 claudex models
 claudex login -no-browser
-claude-gpt                       # shorthand for: claudex launch
+claudex launch                   # start Claude Code through the gateway
 ```
 
 `claudex install` does the following:
 
 - Copies the running binary to `~/.local/share/claudex/bin/claudex`.
 - Writes `~/.config/claudex/config.json` and the generated Claude settings.
-- Installs the `claude-gpt` wrapper in `~/.local/bin`.
+- Installs a `claudex` command in `~/.local/bin` that runs the installed binary.
+  It replaces the `claude-gpt` launcher that older releases installed.
 - Registers the launchd agent `local.claudex.proxy`.
 
 The service log is `~/.local/share/claudex/logs/service.log`. Install keeps an
@@ -164,7 +166,7 @@ shares the container's client key and sign-in.
 claudex uninstall
 ```
 
-This stops the service and removes the installed binary, wrappers, plist, and
+This stops the service and removes the installed binary, the `claudex` command, plist, and
 settings. Config and credentials are kept in `~/.config/claudex`.
 
 To remove everything manually:
@@ -172,7 +174,7 @@ To remove everything manually:
 ```sh
 claudex stop
 rm -f ~/Library/LaunchAgents/local.claudex.proxy.plist
-rm -f ~/.local/bin/claude-gpt
+rm -f ~/.local/bin/claudex
 rm -rf ~/.local/share/claudex
 rm -rf ~/.config/claudex          # also removes the client key and Codex sign-in
 ```
