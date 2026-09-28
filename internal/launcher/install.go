@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -59,6 +60,11 @@ func install(s *Service, opts InstallOptions) (err error) {
 	if err != nil {
 		return err
 	}
+	// Older releases enabled the dashboard with a launchd argument; keep it on.
+	if !cfg.Dashboard && legacyDashboard(p) {
+		cfg.Dashboard = true
+		fmt.Fprintln(s.Out, "Dashboard kept on; it is now the dashboard setting in the config.")
+	}
 	encodedConfig, err := encodeJSON(cfg)
 	if err != nil {
 		return err
@@ -99,7 +105,7 @@ func install(s *Service, opts InstallOptions) (err error) {
 			return errLoad
 		}
 		var release func()
-		release, err = s.Drain(ctx, oldConfig)
+		release, err = s.Quiesce(ctx, oldConfig)
 		if err != nil {
 			return err
 		}
@@ -211,6 +217,17 @@ func Uninstall(s *Service) error {
 	os.Remove(p.State)
 	fmt.Fprintf(s.Out, "Uninstalled. Config and credentials kept in %s\n", p.Config)
 	return nil
+}
+
+// legacyDashboard reports whether an installed plist from an older release
+// passes -dashboard to the gateway.
+func legacyDashboard(p Paths) bool {
+	for _, path := range []string{p.Agent, p.ServicePlist()} {
+		if data, err := os.ReadFile(path); err == nil && bytes.Contains(data, []byte("<string>-dashboard</string>")) {
+			return true
+		}
+	}
+	return false
 }
 
 // installConfig loads the existing gateway config or builds the defaults for a

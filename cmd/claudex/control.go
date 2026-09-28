@@ -35,7 +35,7 @@ func cmdOverview(args []string) error {
 			state, err := launcher.NewService(paths).ReadControl(context.Background(), cfg)
 			if err != nil {
 				checks = append(checks, launcher.Check{Level: launcher.LevelFail, Name: "gateway control", Detail: err.Error()})
-			} else if state.Revision != launcher.Revision(cfg) {
+			} else if state.Revision != cfg.Revision() {
 				checks = append(checks, launcher.Check{Level: launcher.LevelFail, Name: "gateway settings", Detail: "running gateway differs from config; run claudex ctl restart"})
 			}
 			break

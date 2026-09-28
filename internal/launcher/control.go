@@ -2,8 +2,6 @@ package launcher
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,16 +41,15 @@ type ControlStatus struct {
 	Dashboard bool   `json:"dashboard"`
 }
 
-func Revision(cfg config.Config) string {
-	data, _ := json.Marshal(cfg)
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
-}
+// ErrControlUnavailable reports that the gateway at the configured address
+// could not answer a control request: it is down, rejects this installation's
+// key, or predates the control endpoints.
+var ErrControlUnavailable = errors.New("gateway control unavailable")
 
 func (s *Service) control(ctx context.Context, cfg config.Config, method, path, token string, result any) error {
 	key, err := os.ReadFile(cfg.ClientKeyFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrControlUnavailable, err)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, "http://"+cfg.Listen+path, nil)
 	if err != nil {
@@ -64,13 +61,19 @@ func (s *Service) control(ctx context.Context, cfg config.Config, method, path, 
 	}
 	resp, err := s.HTTP.Do(req)
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("%w: %v", ErrControlUnavailable, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		if resp.StatusCode == http.StatusNotFound {
-			return errors.New("the running gateway does not support controlled restarts; stop it before applying changes")
-		}
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusNoContent:
+	case http.StatusNotFound:
+		return fmt.Errorf("%w: the running gateway predates controlled restarts", ErrControlUnavailable)
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("%w: the running gateway rejected this installation's key", ErrControlUnavailable)
+	default:
 		return fmt.Errorf("gateway control returned HTTP %d", resp.StatusCode)
 	}
 	if result == nil || resp.StatusCode == http.StatusNoContent {
@@ -90,13 +93,6 @@ func (s *Service) ReadControl(ctx context.Context, cfg config.Config) (ControlSt
 func (s *Service) Drain(ctx context.Context, cfg config.Config) (func(), error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	status, err := s.ReadControl(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	if status.Revision != Revision(cfg) {
-		return nil, errors.New("the running gateway uses different config; stop it before applying changes")
-	}
 	var lease struct {
 		Token  string `json:"token"`
 		Active int    `json:"active"`
@@ -130,6 +126,19 @@ func (s *Service) Drain(ctx context.Context, cfg config.Config) (func(), error) 
 	return release, nil
 }
 
+// Quiesce drains the running gateway before a stop. Draining is a courtesy to
+// active requests, so a gateway that cannot answer (crashed, holding another
+// key, or an older release) is stopped without it. Cancellation and another
+// command's drain still abort.
+func (s *Service) Quiesce(ctx context.Context, cfg config.Config) (func(), error) {
+	release, err := s.Drain(ctx, cfg)
+	if errors.Is(err, ErrControlUnavailable) {
+		fmt.Fprintf(s.Out, "Not waiting for active requests (%v); stopping the gateway.\n", err)
+		return func() {}, nil
+	}
+	return release, err
+}
+
 // ApplyConfig changes one persisted source of truth and restores old state if
 // the new service fails its readiness check.
 func ApplyConfig(ctx context.Context, s *Service, path string, old, next config.Config) error {
@@ -150,7 +159,7 @@ func ApplyConfig(ctx context.Context, s *Service, path string, old, next config.
 		running := goos == "darwin" && path == s.Paths.ConfigFile() && s.Launchd.Loaded(Label)
 		var release func()
 		if running {
-			release, err = s.Drain(ctx, old)
+			release, err = s.Quiesce(ctx, old)
 			if err != nil {
 				return err
 			}
@@ -176,7 +185,12 @@ func ApplyConfig(ctx context.Context, s *Service, path string, old, next config.
 				_ = atomicWrite(s.Paths.Agent, oldAgent, 0o600)
 			}
 			if running {
-				_, recovery := s.Start(old)
+				// The new gateway may already be serving; stop it so the old
+				// settings actually load.
+				recovery := s.Stop()
+				if recovery == nil {
+					_, recovery = s.Start(old)
+				}
 				err = errors.Join(err, recovery)
 			}
 		}()
@@ -186,12 +200,17 @@ func ApplyConfig(ctx context.Context, s *Service, path string, old, next config.
 		if err = ctx.Err(); err != nil {
 			return err
 		}
+		// Refresh an installed service's plist; never create one after uninstall.
 		if goos == "darwin" && path == s.Paths.ConfigFile() {
-			if err = atomicWrite(s.Paths.ServicePlist(), plist(s.Paths), 0o600); err != nil {
-				return err
+			if plistErr == nil {
+				if err = atomicWrite(s.Paths.ServicePlist(), plist(s.Paths), 0o600); err != nil {
+					return err
+				}
 			}
-			if err = atomicWrite(s.Paths.Agent, plist(s.Paths), 0o600); err != nil {
-				return err
+			if agentErr == nil {
+				if err = atomicWrite(s.Paths.Agent, plist(s.Paths), 0o600); err != nil {
+					return err
+				}
 			}
 		}
 		if running {
@@ -203,7 +222,7 @@ func ApplyConfig(ctx context.Context, s *Service, path string, old, next config.
 			if err != nil {
 				return err
 			}
-			if actual.Revision != Revision(next) || actual.Dashboard != next.Dashboard {
+			if actual.Revision != next.Revision() || actual.Dashboard != next.Dashboard {
 				return errors.New("gateway started with different settings")
 			}
 		}

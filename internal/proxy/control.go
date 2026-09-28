@@ -2,14 +2,10 @@ package proxy
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/marenzo/claudex/internal/config"
 )
 
 const drainLease = 30 * time.Second
@@ -75,17 +71,11 @@ func (c *controlState) release(token string) bool {
 	return true
 }
 
-func configRevision(cfg config.Config) string {
-	data, _ := json.Marshal(cfg)
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
-}
-
 func (s *Server) controlStatus(w http.ResponseWriter, _ *http.Request) {
 	active, draining := s.control.snapshot()
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]any{"version": s.version, "active": active, "draining": draining,
-		"revision": configRevision(s.Config), "dashboard": s.metrics != nil})
+		"revision": s.Config.Revision(), "dashboard": s.metrics != nil})
 }
 
 func (s *Server) controlDrain(w http.ResponseWriter, r *http.Request) {

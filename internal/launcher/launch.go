@@ -77,7 +77,7 @@ func (l *Launcher) Run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if control.Revision != Revision(cfg) {
+	if control.Revision != cfg.Revision() {
 		return errors.New("gateway settings differ from the config; run claudex ctl restart")
 	}
 	key, err := os.ReadFile(cfg.ClientKeyFile)

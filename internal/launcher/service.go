@@ -47,7 +47,7 @@ var ErrUnauthorized = errors.New("the configured port rejected this installation
 func (s *Service) SignIn(ctx context.Context, cfg config.Config, noBrowser bool) error {
 	running := s.Launchd.Loaded(Label)
 	if running {
-		release, err := s.Drain(ctx, cfg)
+		release, err := s.Quiesce(ctx, cfg)
 		if err != nil {
 			return err
 		}

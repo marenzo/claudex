@@ -40,3 +40,16 @@ func TestConfigValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestRevisionIgnoresDashboardOverride(t *testing.T) {
+	cfg := DefaultsFor("/fixture")
+	withDashboard := cfg
+	withDashboard.Dashboard = true
+	if cfg.Revision() != withDashboard.Revision() {
+		t.Error("dashboard changed the revision")
+	}
+	cfg.Model = "gpt-5.6-sol"
+	if cfg.Revision() == withDashboard.Revision() {
+		t.Error("model did not change the revision")
+	}
+}

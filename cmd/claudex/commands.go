@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/marenzo/claudex/internal/auth"
@@ -77,7 +78,7 @@ func command(args []string) error {
 		fmt.Printf("claudex %s (%s; %s)\n", buildVersion(), Commit, BuildDate)
 		return nil
 	default:
-		if name == "--verbose" || name == "--json" {
+		if strings.HasPrefix(name, "-") {
 			return cmdOverview(args)
 		}
 		return usageError{fmt.Sprintf("unknown control command %q; run claudex ctl --help", name)}
@@ -191,7 +192,7 @@ func cmdService(name string, args []string) error {
 		ctx, cancel := signalContext()
 		defer cancel()
 		if service.Launchd.Loaded(launcher.Label) {
-			release, err := service.Drain(ctx, cfg)
+			release, err := service.Quiesce(ctx, cfg)
 			if err != nil {
 				return err
 			}

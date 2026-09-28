@@ -102,7 +102,7 @@ func writeConfig(t *testing.T, s *Service, listen string, key string) config.Con
 		}
 	}
 	data, _ := json.Marshal(cfg)
-	gatewayRevisions.Store(listen, Revision(cfg))
+	gatewayRevisions.Store(listen, cfg.Revision())
 	if err := os.WriteFile(s.Paths.ConfigFile(), data, 0o600); err != nil {
 		t.Fatal(err)
 	}

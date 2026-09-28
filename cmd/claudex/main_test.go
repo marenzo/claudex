@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,7 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 		{[]string{"stop", "extra"}, "usage: claudex ctl stop"},
 		{[]string{"--version", "extra"}, "usage: claudex ctl --version"},
 		{[]string{"uninstall", "extra"}, "usage: claudex ctl uninstall"},
+		{[]string{"--bogus"}, "usage: claudex ctl ["},
 	} {
 		err := command(test.args)
 		var misuse usageError
@@ -33,6 +35,16 @@ func TestHelpIsNotAnError(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}} {
 		if err := dispatch(append([]string{"ctl"}, args...)); err != nil {
 			t.Errorf("%q: %v", args, err)
+		}
+	}
+}
+
+func TestOverviewAcceptsItsFlagsFirst(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "config.json")
+	for _, args := range [][]string{{"--config", missing}, {"-verbose", "--config", missing}, {"--json", "--config=" + missing}} {
+		var misuse usageError
+		if err := command(args); errors.As(err, &misuse) {
+			t.Errorf("%q: rejected as usage error: %v", args, err)
 		}
 	}
 }
