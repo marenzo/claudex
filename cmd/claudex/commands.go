@@ -151,7 +151,7 @@ func cmdSetup(args []string) error {
 		} else if _, errCheck := auth.NewStore(cfg.AuthFile).Check(); errCheck == nil && !*forceLogin {
 			fmt.Println("Already signed in to Codex.")
 		} else if !interactive() && !*noBrowser {
-			return errors.New("Codex sign-in needs a terminal; use claudex ctl setup --no-browser or --no-login")
+			return errors.New("signing in to Codex needs a terminal; use claudex ctl setup --no-browser or --no-login")
 		} else if err := signIn(ctx, paths, *path, cfg, *noBrowser); err != nil {
 			return err
 		}
