@@ -158,6 +158,19 @@ func TestRewriteArgsPreservesClaudeArguments(t *testing.T) {
 	}
 }
 
+func TestSettingsSelectClassifierLocation(t *testing.T) {
+	cfg := config.DefaultsFor("/fixture")
+	settings, err := Settings(cfg)
+	if err != nil || settings.Env["CLAUDE_CODE_AUTO_MODE_SERVER"] != "0" {
+		t.Fatalf("client-side default: %v %+v", err, settings)
+	}
+	cfg.AutoModeClassifierModel = "astra"
+	settings, err = Settings(cfg)
+	if err != nil || settings.Env["CLAUDE_CODE_AUTO_MODE_SERVER"] != "1" {
+		t.Fatalf("server opt in: %v %+v", err, settings)
+	}
+}
+
 func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	s, launchd := testService(t)
 	server := gateway(t, "fixture-key")

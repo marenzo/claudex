@@ -11,13 +11,14 @@ import (
 )
 
 type Config struct {
-	Listen          string `json:"listen"`
-	AuthFile        string `json:"auth_file"`
-	ClientKeyFile   string `json:"client_key_file"`
-	Model           string `json:"model"`
-	ReasoningEffort string `json:"reasoning_effort"`
-	ContextWindow   int    `json:"context_window"`
-	CompactWindow   int    `json:"compact_window"`
+	Listen                  string `json:"listen"`
+	AuthFile                string `json:"auth_file"`
+	ClientKeyFile           string `json:"client_key_file"`
+	Model                   string `json:"model"`
+	ReasoningEffort         string `json:"reasoning_effort"`
+	ContextWindow           int    `json:"context_window"`
+	CompactWindow           int    `json:"compact_window"`
+	AutoModeClassifierModel string `json:"auto_mode_classifier_model,omitempty"`
 }
 
 func DefaultPath() string {
@@ -59,6 +60,10 @@ func Load(path string) (Config, error) {
 	}
 	model, _ := FindModel(cfg.Model)
 	cfg.Model = model.ID
+	if cfg.AutoModeClassifierModel != "" {
+		classifier, _ := FindModel(cfg.AutoModeClassifierModel)
+		cfg.AutoModeClassifierModel = classifier.ID
+	}
 	return cfg, nil
 }
 
@@ -72,6 +77,11 @@ func (c Config) Validate() error {
 	}
 	if _, ok := FindModel(c.Model); !ok {
 		return fmt.Errorf("model must be gpt-6-astra, gpt-5.6-terra, gpt-5.6-sol, or gpt-5.6-luna")
+	}
+	if c.AutoModeClassifierModel != "" {
+		if _, ok := FindModel(c.AutoModeClassifierModel); !ok {
+			return fmt.Errorf("auto_mode_classifier_model must be empty or a supported GPT model")
+		}
 	}
 	switch c.ReasoningEffort {
 	case "low", "medium", "high", "xhigh", "max", "ultra":
