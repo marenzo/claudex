@@ -1,6 +1,8 @@
 package launcher
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -16,16 +18,20 @@ import (
 
 // InstallOptions controls Install.
 type InstallOptions struct {
-	Source    string // claudex binary to install; defaults to the running executable
-	Dashboard bool   // enable the local usage dashboard
-	NoStart   bool   // install without starting the service
+	Source  string          // claudex binary to install; defaults to the running executable
+	NoStart bool            // install without starting the service
+	Context context.Context // cancellation while waiting for active requests
 }
 
 // Install copies the gateway into the user's state directory, writes the
-// config, Claude settings, the claudex command on PATH and launchd agent, then
-// starts the service. Every replaced file is backed up first; a failure
-// restores it.
+// config, the claudex command on PATH and launchd agent, then starts the
+// service. Every replaced file is backed up first; a failure restores it.
+// Callers hold WithControlLock.
 func Install(s *Service, opts InstallOptions) (err error) {
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if goos != "darwin" {
 		return errors.New("the service installer supports macOS; run claudex directly or use Docker elsewhere")
 	}
@@ -43,13 +49,10 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	if err != nil {
 		return err
 	}
-	settings, err := Settings(cfg)
-	if err != nil {
-		return err
-	}
-	encodedSettings, err := encodeJSON(settings)
-	if err != nil {
-		return err
+	// Older releases enabled the dashboard with a launchd argument; keep it on.
+	if !cfg.Dashboard && legacyDashboard(p) {
+		cfg.Dashboard = true
+		fmt.Fprintln(s.Out, "Dashboard kept on; it is now the dashboard setting in the config.")
 	}
 	encodedConfig, err := encodeJSON(cfg)
 	if err != nil {
@@ -60,8 +63,7 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	if err := os.MkdirAll(backup, 0o700); err != nil {
 		return err
 	}
-	targets := []string{p.Binary(), p.ServicePlist(), p.ConfigFile(), p.SettingsFile(),
-		p.Command(), p.Wrapper(legacyLauncher), p.Agent}
+	targets := []string{p.Binary(), p.ServicePlist(), p.ConfigFile(), p.Command(), p.Agent}
 	if _, err := os.Stat(cfg.ClientKeyFile); err != nil {
 		targets = append(targets, cfg.ClientKeyFile)
 	}
@@ -86,6 +88,17 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	}
 
 	running := s.Launchd.Loaded(Label)
+	if running {
+		oldConfig, errLoad := config.Load(p.ConfigFile())
+		if errLoad != nil {
+			return errLoad
+		}
+		release, errStop := s.Shutdown(ctx, oldConfig)
+		if errStop != nil {
+			return errStop
+		}
+		defer release()
+	}
 	defer func() {
 		if err == nil {
 			return
@@ -109,46 +122,38 @@ func Install(s *Service, opts InstallOptions) (err error) {
 		}
 	}()
 
-	if running {
-		if err = s.Stop(); err != nil {
-			return err
-		}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if _, errStat := os.Stat(cfg.ClientKeyFile); errStat != nil {
 		key := make([]byte, 36)
 		if _, err = rand.Read(key); err != nil {
 			return err
 		}
-		if err = atomicWrite(cfg.ClientKeyFile, []byte(base64.RawURLEncoding.EncodeToString(key)+"\n"), 0o600); err != nil {
+		if err = config.WriteFile(cfg.ClientKeyFile, []byte(base64.RawURLEncoding.EncodeToString(key)+"\n"), 0o600); err != nil {
 			return err
 		}
 	}
-	if err = atomicWrite(p.Binary(), binary, 0o755); err != nil {
+	if err = config.WriteFile(p.Binary(), binary, 0o755); err != nil {
 		return err
 	}
-	if err = atomicWrite(p.ConfigFile(), encodedConfig, 0o600); err != nil {
-		return err
-	}
-	if err = atomicWrite(p.SettingsFile(), encodedSettings, 0o600); err != nil {
+	if err = config.WriteFile(p.ConfigFile(), encodedConfig, 0o600); err != nil {
 		return err
 	}
 	// Quote for the shell, not Go: double quotes still expand dollars and backticks.
 	quotedBinary := "'" + strings.ReplaceAll(p.Binary(), "'", "'\"'\"'") + "'"
 	command := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", quotedBinary)
-	if err = atomicWrite(p.Command(), []byte(command), 0o755); err != nil {
+	if err = config.WriteFile(p.Command(), []byte(command), 0o755); err != nil {
 		return err
-	}
-	if errRemove := os.Remove(p.Wrapper(legacyLauncher)); errRemove != nil && !os.IsNotExist(errRemove) {
-		return errRemove
 	}
 	if err = os.MkdirAll(filepath.Dir(p.LogFile()), 0o700); err != nil {
 		return err
 	}
-	encodedPlist := plist(p, opts.Dashboard)
-	if err = atomicWrite(p.ServicePlist(), encodedPlist, 0o600); err != nil {
+	encodedPlist := plist(p)
+	if err = config.WriteFile(p.ServicePlist(), encodedPlist, 0o600); err != nil {
 		return err
 	}
-	if err = atomicWrite(p.Agent, encodedPlist, 0o600); err != nil {
+	if err = config.WriteFile(p.Agent, encodedPlist, 0o600); err != nil {
 		return err
 	}
 	if !opts.NoStart {
@@ -156,11 +161,11 @@ func Install(s *Service, opts InstallOptions) (err error) {
 			return err
 		}
 	}
-	fmt.Fprintf(s.Out, "Installed. Ensure %s is on PATH, then run: claudex launch\n", p.Bin)
+	fmt.Fprintf(s.Out, "Installed. Ensure %s is on PATH, then run: claudex\n", p.Bin)
 	if _, errStat := os.Stat(cfg.AuthFile); errStat != nil {
-		fmt.Fprintln(s.Out, "Sign in first: claudex login")
+		fmt.Fprintln(s.Out, "Sign in first: claudex ctl setup --login")
 	}
-	if opts.Dashboard {
+	if cfg.Dashboard {
 		fmt.Fprintf(s.Out, "Dashboard: http://%s/dashboard\n", cfg.Listen)
 	}
 	fmt.Fprintln(s.Out, "Backup:", backup)
@@ -182,10 +187,7 @@ func Uninstall(s *Service) error {
 	for _, path := range []string{
 		p.Binary(),
 		p.ServicePlist(),
-		p.SettingsFile(),
 		p.Command(),
-		p.Wrapper(legacyLauncher),
-		p.Wrapper("claudex-service"),
 		p.Agent,
 	} {
 		os.Remove(path)
@@ -195,6 +197,17 @@ func Uninstall(s *Service) error {
 	os.Remove(p.State)
 	fmt.Fprintf(s.Out, "Uninstalled. Config and credentials kept in %s\n", p.Config)
 	return nil
+}
+
+// legacyDashboard reports whether an installed plist from an older release
+// passes -dashboard to the gateway.
+func legacyDashboard(p Paths) bool {
+	for _, path := range []string{p.Agent, p.ServicePlist()} {
+		if data, err := os.ReadFile(path); err == nil && bytes.Contains(data, []byte("<string>-dashboard</string>")) {
+			return true
+		}
+	}
+	return false
 }
 
 // installConfig loads the existing gateway config or builds the defaults for a
@@ -221,10 +234,10 @@ func copyFile(from, to string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	return atomicWrite(to, data, mode)
+	return config.WriteFile(to, data, mode)
 }
 
-// exists reports whether the installation has generated launcher settings.
+// exists reports whether an installed service file is present.
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

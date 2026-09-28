@@ -12,7 +12,7 @@ or resistance to arbitrary prompt injection. Keep it opt-in while evaluating it.
 
 ## Enable
 
-Add this field to your Claudex config:
+Run `claudex ctl config reviewer astra`, or add this field to your Claudex config:
 
 ```json
 "auto_mode_classifier_model": "astra"
@@ -20,16 +20,16 @@ Add this field to your Claudex config:
 
 Any supported model or alias is accepted, independently of the generation model.
 The reviewer uses `high` reasoning effort. Only Astra has been live-tested for
-this feature. Run `claudex install` to regenerate launcher settings and restart
-the gateway, then start a fresh `claudex launch` session in auto mode. The generated
-settings select `CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
+this feature. `ctl config` waits for active requests and applies the change.
+Start a fresh `claudex` session in auto mode. The launcher selects
+`CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
 
 For a portable or Docker gateway, restart it with the changed config and set
 `CLAUDE_CODE_AUTO_MODE_SERVER=1` in the shell that starts Claude Code. `/status`
 inside Claude Code reports whether the session uses server classification.
 
-Remove the field or set it to an empty string to disable the custom reviewer.
-Regenerate settings and start a new session. The launcher then selects
+Run `claudex ctl config reviewer client`, or remove the field or set it to an
+empty string, to disable the custom reviewer. Start a new session. The launcher then selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=0`, which keeps Claude Code's own client-side
 classifier active and routes its ordinary model requests through Claudex.
 The variable selects the location of classification; it does not turn auto mode

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/marenzo/claudex/internal/auth"
@@ -17,28 +18,17 @@ import (
 	"github.com/marenzo/claudex/internal/launcher"
 )
 
-const usageText = `Claudex runs Claude Code against a Codex subscription through a local gateway.
+const usageText = `Claudex starts Claude Code with GPT through a local Codex gateway.
 
-Usage:
-  claudex <command> [flags]
+  claudex [Claude arguments]       Start Claude Code (for example --resume)
+  claudex ctl                      Show gateway health and preferences
+  claudex ctl setup                Set up or repair Claudex
+  claudex ctl config               Change preferences
+  claudex ctl logs                 Read gateway logs
+  claudex ctl restart              Restart the gateway
 
-Commands:
-  setup        Initialize, sign in, and install the service (macOS)
-  run          Run the gateway in the foreground
-  init         Create the config and a client key
-  login        Sign in with a Codex subscription
-  install      Install and start the launchd service (macOS)
-  start        Start the installed service (macOS)
-  stop         Stop the installed service (macOS)
-  restart      Restart the installed service (macOS)
-  status       Check config, sign-in, gateway, and service
-  models       List models from the running gateway
-  launch       Start Claude Code through the gateway (macOS)
-  uninstall    Remove the installed service and command (macOS)
-  version      Print build version
-  help         Show this help
-
-Run claudex <command> -help for command-specific flags.
+Also available: ctl start, stop, run, uninstall, --version, --help.
+Claude options and commands, including --help and --version, pass through.
 `
 
 func usage(w io.Writer) { fmt.Fprint(w, usageText) }
@@ -46,49 +36,52 @@ func usage(w io.Writer) { fmt.Fprint(w, usageText) }
 // errHelpShown ends a command after it printed its own -help output.
 var errHelpShown = errors.New("help shown")
 
-// dispatch runs the command named by args; no arguments prints help.
+// Only ctl belongs to Claudex. Other arguments belong to Claude Code.
 func dispatch(args []string) error {
-	if len(args) == 0 {
-		usage(os.Stdout)
+	if len(args) > 0 && args[0] == "ctl" {
+		if err := command(args[1:]); !errors.Is(err, errHelpShown) {
+			return err
+		}
 		return nil
 	}
-	if err := command(args[0], args[1:]); !errors.Is(err, errHelpShown) {
-		return err
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") && interactive() {
+		fmt.Fprintln(os.Stderr, "Claudex controls: claudex ctl --help")
 	}
-	return nil
+	return cmdLaunch(args)
 }
 
-func command(name string, args []string) error {
+func command(args []string) error {
+	if len(args) == 0 {
+		return cmdOverview(nil)
+	}
+	name, rest := args[0], args[1:]
 	switch name {
 	case "help", "-h", "-help", "--help":
 		usage(os.Stdout)
 		return nil
 	case "setup":
-		return cmdSetup(args)
+		return cmdSetup(rest)
 	case "run":
-		return runGateway(args)
-	case "init":
-		return cmdInit(args)
-	case "login":
-		return cmdLogin(args)
-	case "install":
-		return cmdInstall(args)
-	case "start", "stop", "restart", "models":
-		return cmdService(name, args)
-	case "status":
-		return cmdStatus(args)
-	case "launch":
-		return cmdLaunch(args)
+		return runGateway(rest)
+	case "config":
+		return cmdConfig(rest)
+	case "logs":
+		return cmdLogs(rest)
+	case "start", "stop", "restart":
+		return cmdService(name, rest)
 	case "uninstall":
-		return cmdUninstall(args)
-	case "version":
-		if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), args, "usage: claudex version"); err != nil {
+		return cmdUninstall(rest)
+	case "--version", "-v":
+		if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), rest, "usage: claudex ctl --version"); err != nil {
 			return err
 		}
 		fmt.Printf("claudex %s (%s; %s)\n", buildVersion(), Commit, BuildDate)
 		return nil
 	default:
-		return usageError{fmt.Sprintf("unknown command %q; run claudex help", name)}
+		if strings.HasPrefix(name, "-") {
+			return cmdOverview(args)
+		}
+		return usageError{fmt.Sprintf("unknown control command %q; run claudex ctl --help", name)}
 	}
 }
 
@@ -113,43 +106,6 @@ func signalContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
-func cmdInit(args []string) error {
-	set := flag.NewFlagSet("init", flag.ContinueOnError)
-	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
-	if err := parseFlags(set, args, "usage: claudex init [-config PATH]"); err != nil {
-		return err
-	}
-	if err := config.Initialize(*path); err != nil {
-		return err
-	}
-	next := "claudex login"
-	if *path != config.DefaultPath() {
-		next += fmt.Sprintf(" -config %q", *path)
-	}
-	fmt.Printf("Claudex config ready: %s\nSign in next with: %s\n", *path, next)
-	return nil
-}
-
-func cmdLogin(args []string) error {
-	set := flag.NewFlagSet("login", flag.ContinueOnError)
-	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
-	noBrowser := set.Bool("no-browser", false, "Print the sign-in URL without opening a browser")
-	if err := parseFlags(set, args, "usage: claudex login [-no-browser] [-config PATH]"); err != nil {
-		return err
-	}
-	cfg, err := config.Load(*path)
-	if err != nil {
-		return err
-	}
-	paths, err := launcher.DefaultPaths()
-	if err != nil {
-		return err
-	}
-	ctx, stop := signalContext()
-	defer stop()
-	return signIn(ctx, paths, *path, cfg, *noBrowser)
-}
-
 // signIn pauses the installed macOS service while signing in to its credential
 // store, so sign-in and token refresh never race on the same file.
 func signIn(ctx context.Context, paths launcher.Paths, path string, cfg config.Config, noBrowser bool) error {
@@ -165,57 +121,54 @@ func signIn(ctx context.Context, paths launcher.Paths, path string, cfg config.C
 
 func cmdSetup(args []string) error {
 	set := flag.NewFlagSet("setup", flag.ContinueOnError)
+	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
 	noBrowser := set.Bool("no-browser", false, "Print the sign-in URL without opening a browser")
-	dashboard := set.Bool("dashboard", false, "Enable the local usage dashboard")
 	noStart := set.Bool("no-start", false, "Install without starting the service")
-	if err := parseFlags(set, args, "usage: claudex setup [-no-browser] [-dashboard] [-no-start]"); err != nil {
+	noLogin := set.Bool("no-login", false, "Initialize without signing in")
+	forceLogin := set.Bool("login", false, "Sign in again even when credentials are valid")
+	if err := parseFlags(set, args, "usage: claudex ctl setup [--config PATH] [--no-browser] [--no-login] [--login] [--no-start]"); err != nil {
 		return err
 	}
-	if runtime.GOOS != "darwin" {
-		return errors.New("setup installs the macOS service; elsewhere run claudex init, claudex login, then claudex run")
+	if *noLogin && *forceLogin {
+		return usageError{"choose either --login or --no-login"}
 	}
 	paths, err := launcher.DefaultPaths()
 	if err != nil {
 		return err
 	}
-	path := paths.ConfigFile()
-	if err := config.Initialize(path); err != nil && !errors.Is(err, config.ErrExists) {
-		return err
-	}
-	cfg, err := config.Load(path)
-	if err != nil {
-		return err
-	}
-	ctx, stop := signalContext()
-	defer stop()
-	if _, errCheck := auth.NewStore(cfg.AuthFile).Check(); errCheck == nil {
-		fmt.Println("Already signed in to Codex.")
-	} else if err := signIn(ctx, paths, path, cfg, *noBrowser); err != nil {
-		return err
-	}
-	return launcher.Install(launcher.NewService(paths), launcher.InstallOptions{Dashboard: *dashboard, NoStart: *noStart})
-}
-
-func cmdInstall(args []string) error {
-	set := flag.NewFlagSet("install", flag.ContinueOnError)
-	dashboard := set.Bool("dashboard", false, "Enable the local usage dashboard")
-	noStart := set.Bool("no-start", false, "Install without starting the service")
-	if err := parseFlags(set, args, "usage: claudex install [-dashboard] [-no-start]"); err != nil {
-		return err
-	}
-	paths, err := launcher.DefaultPaths()
-	if err != nil {
-		return err
-	}
-	return launcher.Install(launcher.NewService(paths), launcher.InstallOptions{Dashboard: *dashboard, NoStart: *noStart})
+	return launcher.WithControlLock(paths, func() error {
+		if err := config.Initialize(*path); err != nil && !errors.Is(err, config.ErrExists) {
+			return err
+		}
+		cfg, err := config.Load(*path)
+		if err != nil {
+			return err
+		}
+		ctx, stop := signalContext()
+		defer stop()
+		if *noLogin {
+			fmt.Println("Codex sign-in skipped.")
+		} else if _, errCheck := auth.NewStore(cfg.AuthFile).Check(); errCheck == nil && !*forceLogin {
+			fmt.Println("Already signed in to Codex.")
+		} else if !interactive() && !*noBrowser {
+			return errors.New("signing in to Codex needs a terminal; use claudex ctl setup --no-browser or --no-login")
+		} else if err := signIn(ctx, paths, *path, cfg, *noBrowser); err != nil {
+			return err
+		}
+		if runtime.GOOS != "darwin" || *path != paths.ConfigFile() {
+			fmt.Println("Config ready. Start the foreground gateway with: claudex ctl run")
+			return nil
+		}
+		return launcher.Install(launcher.NewService(paths), launcher.InstallOptions{NoStart: *noStart, Context: ctx})
+	})
 }
 
 func cmdService(name string, args []string) error {
-	if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), args, "usage: claudex "+name); err != nil {
+	if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), args, "usage: claudex ctl "+name); err != nil {
 		return err
 	}
-	if runtime.GOOS != "darwin" && name != "models" {
-		return fmt.Errorf("claudex %s manages the macOS service; elsewhere use claudex run", name)
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("claudex ctl %s manages the macOS service; elsewhere use claudex ctl run", name)
 	}
 	paths, err := launcher.DefaultPaths()
 	if err != nil {
@@ -232,40 +185,21 @@ func cmdService(name string, args []string) error {
 	}
 	cfg, err := config.Load(paths.ConfigFile())
 	if err != nil {
-		return fmt.Errorf("cannot read gateway settings at %s; repair the config or rerun claudex install: %w", paths.ConfigFile(), err)
+		return fmt.Errorf("cannot read gateway settings at %s; repair the config or rerun claudex ctl setup: %w", paths.ConfigFile(), err)
 	}
 	switch name {
-	case "models":
-		models, err := service.Models(cfg)
-		if err != nil {
-			return err
-		}
-		for _, model := range models {
-			fmt.Println(model)
-		}
-		return nil
 	case "restart":
-		if err := service.Stop(); err != nil {
-			return err
+		ctx, cancel := signalContext()
+		defer cancel()
+		if service.Launchd.Loaded(launcher.Label) {
+			release, err := service.Shutdown(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			defer release()
 		}
 	}
 	return service.Report(cfg)
-}
-
-func cmdStatus(args []string) error {
-	set := flag.NewFlagSet("status", flag.ContinueOnError)
-	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
-	if err := parseFlags(set, args, "usage: claudex status [-config PATH]"); err != nil {
-		return err
-	}
-	paths, err := launcher.DefaultPaths()
-	if err != nil {
-		return err
-	}
-	if launcher.PrintChecks(os.Stdout, launcher.NewStatus(paths, *path).Run()) {
-		return errors.New("one or more checks failed")
-	}
-	return nil
 }
 
 func cmdLaunch(args []string) error {
@@ -273,11 +207,19 @@ func cmdLaunch(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(args) == 0 && interactive() && runtime.GOOS == "darwin" {
+		if _, err := os.Stat(paths.ServicePlist()); os.IsNotExist(err) {
+			fmt.Println("Claudex will prepare your Codex sign-in and macOS service.")
+			if err := cmdSetup(nil); err != nil {
+				return err
+			}
+		}
+	}
 	return launcher.NewLauncher(launcher.NewService(paths)).Run(args)
 }
 
 func cmdUninstall(args []string) error {
-	if err := parseFlags(flag.NewFlagSet("uninstall", flag.ContinueOnError), args, "usage: claudex uninstall"); err != nil {
+	if err := parseFlags(flag.NewFlagSet("uninstall", flag.ContinueOnError), args, "usage: claudex ctl uninstall"); err != nil {
 		return err
 	}
 	paths, err := launcher.DefaultPaths()

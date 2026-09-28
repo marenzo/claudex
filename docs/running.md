@@ -10,21 +10,18 @@ need at runtime. Both options place it at `dist/claudex`; use that path until
 you have installed the command on PATH.
 
 ```sh
-./dist/claudex init
-./dist/claudex login
-./dist/claudex run               # foreground; Ctrl-C stops it
-# Or enable the optional dashboard:
-./dist/claudex run -dashboard
+./dist/claudex ctl setup
+./dist/claudex ctl run           # foreground; Ctrl-C stops it
 ```
 
-`init` creates a private config and a random client key. It never overwrites an
-existing setup. The default config is `~/.config/claudex/config.json`. For another
-location, pass `-config /absolute/path/config.json` to `init`, `login`, `run`,
-and `status`.
-`login -no-browser` prints the sign-in URL for you to open. The browser callback
+`ctl setup` creates a private config and a random client key and signs in. It never
+overwrites an existing sign-in. The default config is
+`~/.config/claudex/config.json`. For another location, pass
+`--config /absolute/path/config.json` to `ctl setup`, `ctl run`, and `ctl`.
+`ctl setup --no-browser` prints the sign-in URL for you to open. The browser callback
 must reach `127.0.0.1:1455` on the machine running Claudex.
 
-On macOS, `claudex install` and `claudex launch` apply every launcher setting. With a
+On macOS, `claudex ctl setup` and `claudex` apply launcher settings. With a
 foreground gateway on Linux, set this environment in a second terminal and run the
 installed Claude CLI:
 
@@ -50,7 +47,7 @@ claude --model gpt-6-astra --effort high --disallowedTools Artifact
 
 If your config points to a client key elsewhere, use its `client_key_file` path in
 the command above. These variables cover routing, context, and authentication. The
-macOS launcher also adds friendly model names and a generated Claude settings file.
+macOS launcher also adds friendly model names and derives Claude settings from the current config.
 See [the launcher overrides](configuration.md#macos-launcher-overrides). Never use a
 Codex access token as the client key.
 
@@ -67,8 +64,7 @@ native binary first:
 
 ```sh
 make docker                                    # builds claudex:local
-./dist/claudex init -config "$HOME/.config/claudex-docker/host.json"
-./dist/claudex login -config "$HOME/.config/claudex-docker/host.json"
+./dist/claudex ctl setup --config "$HOME/.config/claudex-docker/host.json"
 cp examples/config.json "$HOME/.config/claudex-docker/config.json"
 chmod 600 "$HOME/.config/claudex-docker/config.json"
 docker run --rm --name claudex \
@@ -83,7 +79,7 @@ reading the client key from `~/.config/claudex-docker/client-key`. To enable the
 dashboard, append these arguments after `claudex:local`:
 
 ```sh
-run -config /data/config.json -listen 0.0.0.0:8317 -dashboard
+-config /data/config.json -listen 0.0.0.0:8317 -dashboard
 ```
 
 Mount a writable **directory**, not a single file. Refreshing the Codex sign-in
@@ -100,58 +96,54 @@ requests still require the client key.
 The image has a Docker `HEALTHCHECK` that probes `/healthz`, so `docker ps` shows
 the container's health.
 
-To sign in again, stop the container, repeat the host `login` command, and start
+To sign in again, stop the container, repeat the host `ctl setup --login` command, and start
 the container again. Only one gateway should own a credential store at a time.
 
 ## macOS service
 
 ```sh
-claudex setup                    # init + login + install in one step
-# Or individually:
-claudex install                  # -dashboard enables usage metrics; -no-start installs only
-claudex start
-claudex stop
-claudex restart
-claudex status
-claudex models
-claudex login -no-browser
-claudex launch                   # start Claude Code through the gateway
+claudex ctl setup                # initialize, sign in, install
+claudex                          # launch Claude Code through the gateway
+claudex --resume                 # pass Claude options through
+claudex ctl                      # health and preferences
+claudex ctl config               # guided preferences
+claudex ctl logs --follow        # gateway log
+claudex ctl restart              # apply a hand-edited config
 ```
 
-`claudex install` does the following:
+`claudex ctl setup` does the following:
 
 - Copies the running binary to `~/.local/share/claudex/bin/claudex`.
-- Writes `~/.config/claudex/config.json` and the generated Claude settings.
+- Writes `~/.config/claudex/config.json` and the installed service definition.
 - Installs a `claudex` command in `~/.local/bin` that runs the installed binary.
-  It replaces the `claude-gpt` launcher that older releases installed.
 - Registers the launchd agent `local.claudex.proxy`.
 
-The service log is `~/.local/share/claudex/logs/service.log`. Install keeps an
+The service log is `~/.local/share/claudex/logs/service.log`. Setup keeps an
 existing config, client key, and Codex sign-in. It backs up every replaced file
 under `~/.local/share/claudex/backups/`. A failed installation restores them.
 
-To update, download the new binary and run `claudex install` again. Install stops
-the old service during replacement, so finish active Claude requests first. Pass
-`-dashboard` again to keep the dashboard. An installation without that flag
-disables it. `claudex stop` works even when the config is missing or
-malformed, so you can stop a broken setup before repairing it.
+To install a newer build, run `./dist/claudex ctl setup` from that build.
+Claudex waits for current requests before replacement and preserves dashboard
+and reviewer preferences. `ctl stop` works when the config is malformed.
 
 ## Check an installation
 
 ```sh
-claudex status                   # default config: ~/.config/claudex/config.json
-claudex status -config "$HOME/.config/claudex-docker/host.json"
+claudex ctl                      # concise overview
+claudex ctl --verbose            # every check
+claudex ctl --json               # structured output
+claudex ctl --config "$HOME/.config/claudex-docker/host.json"
 ```
 
-`claudex status` changes nothing. It prints one line per check with a level, the
+`claudex ctl` changes nothing. `--verbose` prints one line per check with a level, the
 check name, and a detail. The level is `ok`, `warn`, or `fail`. The command exits
 with status 1 when any check fails. Checks run in this order:
 
 | Check | What it does |
 | --- | --- |
-| `config` | Loads the config. Fails with a hint to run `claudex init` when the file is missing or invalid. The next four checks need the config and are skipped on failure. |
+| `config` | Loads the config. Fails with a hint to run `claudex ctl setup` when the file is missing or invalid. The next four checks need the config and are skipped on failure. |
 | `client key` | Reads `client_key_file`. Warns when group or other users can read it and suggests `chmod 600`. |
-| `codex sign-in` | Fails with a hint to run `claudex login` when the sign-in is missing, malformed, disabled, or incomplete. Shows when the access token expires. It never refreshes the token. |
+| `codex sign-in` | Fails with a hint to run `claudex ctl setup --login` when the sign-in is missing, malformed, disabled, or incomplete. Shows when the access token expires. It never refreshes the token. |
 | `gateway` | Sends `GET /healthz` to the listen address. Warns when nothing answers and says how to start the gateway. Fails when another program answers or the gateway rejects the client key. |
 | `client key accepted` | Sends `GET /v1/models` with the client key. Runs only when the gateway answers. |
 | `macos service` | Runs only on macOS. Reports that the service is not installed, or installed and loaded. Warns when it is installed but not loaded. |
@@ -163,16 +155,16 @@ shares the container's client key and sign-in.
 ## Uninstall
 
 ```sh
-claudex uninstall
+claudex ctl uninstall
 ```
 
-This stops the service and removes the installed binary, the `claudex` command, plist, and
-settings. Config and credentials are kept in `~/.config/claudex`.
+This stops the service and removes the installed binary, the `claudex` command,
+and plist. Config and credentials are kept in `~/.config/claudex`.
 
 To remove everything manually:
 
 ```sh
-claudex stop
+claudex ctl stop
 rm -f ~/Library/LaunchAgents/local.claudex.proxy.plist
 rm -f ~/.local/bin/claudex
 rm -rf ~/.local/share/claudex

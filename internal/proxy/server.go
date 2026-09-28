@@ -33,6 +33,7 @@ type Server struct {
 	version         string
 	metrics         *dashboard.Store
 	classifierSlots chan struct{}
+	control         controlState
 }
 
 func New(cfg config.Config, client *codex.Client, version string) (*Server, error) {
@@ -71,6 +72,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.countTokens)
 	mux.HandleFunc("GET /v1/models", s.models)
 	mux.HandleFunc("GET /v1/models/{id}", s.model)
+	mux.HandleFunc("GET /_claudex/status", s.controlStatus)
+	mux.HandleFunc("/_claudex/drain", s.controlDrain)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"product": "claudex", "status": "ok", "version": s.version, "model": s.Config.Model})
 	})
@@ -83,7 +86,7 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		// Liveness probes need no key: HEAD /api/hello for Claude Code, and
-		// GET /healthz, served by the mux, for Docker, launchd, and claudex status.
+		// GET /healthz, served by the mux, for Docker, launchd, and claudex ctl.
 		if r.Method == http.MethodHead && r.URL.Path == "/api/hello" {
 			w.WriteHeader(200)
 			return
@@ -235,6 +238,12 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		recordAPIError(&record, e)
 		writeError(w, e)
 	}
+	if !s.control.admit() {
+		w.Header().Set("Retry-After", "1")
+		fail(&apiError{Status: 503, Type: "overloaded_error", Message: "Claudex is applying settings; retry shortly."})
+		return
+	}
+	defer s.control.finish()
 	raw, errRead := readRequest(w, r)
 	if errRead != nil {
 		fail(errRead)
@@ -272,9 +281,9 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if errAuth != nil {
 		// Keep file paths and token endpoint details out of the client response.
 		// The service log and the dashboard keep the detail.
-		message := "Codex sign-in could not be used or refreshed. Run claudex login if this continues."
+		message := "Codex sign-in could not be used or refreshed. Run claudex ctl setup --login if this continues."
 		if errors.Is(errAuth, auth.ErrNotSignedIn) {
-			message = "Not signed in to Codex. Run claudex login."
+			message = "Not signed in to Codex. Run claudex ctl setup --login."
 		}
 		if r.Context().Err() == nil {
 			slog.Warn("Codex sign-in unavailable", "error", errAuth.Error())

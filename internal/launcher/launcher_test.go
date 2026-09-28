@@ -26,6 +26,8 @@ type fakeLaunchd struct {
 	bootstrap error
 }
 
+var gatewayRevisions sync.Map
+
 func (f *fakeLaunchd) Loaded(string) bool { f.mu.Lock(); defer f.mu.Unlock(); return f.loaded }
 func (f *fakeLaunchd) Bootout(string) error {
 	f.mu.Lock()
@@ -57,6 +59,15 @@ func gateway(t *testing.T, key string) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "product": "claudex", "version": "test"})
 		case "/v1/models":
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "gpt-6-astra"}, {"id": "gpt-5.6-luna"}}})
+		case "/_claudex/status":
+			revision, _ := gatewayRevisions.Load(r.Host)
+			_ = json.NewEncoder(w).Encode(map[string]any{"revision": revision, "dashboard": false})
+		case "/_claudex/drain":
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				_ = json.NewEncoder(w).Encode(map[string]any{"token": "test-lease", "active": 0})
+			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -91,6 +102,7 @@ func writeConfig(t *testing.T, s *Service, listen string, key string) config.Con
 		}
 	}
 	data, _ := json.Marshal(cfg)
+	gatewayRevisions.Store(listen, cfg.Revision())
 	if err := os.WriteFile(s.Paths.ConfigFile(), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -175,14 +187,18 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	s, launchd := testService(t)
 	server := gateway(t, "fixture-key")
 	cfg := writeConfig(t, s, strings.TrimPrefix(server.URL, "http://"), "fixture-key")
+	cfg.Dashboard = true
+	if err := config.Save(s.Paths.ConfigFile(), cfg); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper(legacyLauncher)
-	if err := os.WriteFile(previous, []byte("previous launcher"), 0o755); err != nil {
+	previous := s.Paths.Command()
+	if err := os.WriteFile(previous, []byte("previous command"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(s, InstallOptions{Source: fixtureBinary(t), Dashboard: true}); err != nil {
+	if err := Install(s, InstallOptions{Source: fixtureBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if data, _ := os.ReadFile(s.Paths.Binary()); string(data) != "fixture binary" {
@@ -198,21 +214,16 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	if err != nil || loaded.Listen != cfg.Listen {
 		t.Fatalf("config rewritten incorrectly: %+v %v", loaded, err)
 	}
-	var settings ClaudeSettings
-	raw, _ := os.ReadFile(s.Paths.SettingsFile())
-	if err := json.Unmarshal(raw, &settings); err != nil || settings.Env["ANTHROPIC_BASE_URL"] != "http://"+cfg.Listen {
-		t.Errorf("settings %s %v", raw, err)
-	}
 	plist, _ := os.ReadFile(s.Paths.Agent)
-	if !strings.Contains(string(plist), "<string>-dashboard</string>") || !strings.Contains(string(plist), Label) {
+	if !strings.Contains(string(plist), "<string>ctl</string>") || !strings.Contains(string(plist), Label) {
 		t.Errorf("plist:\n%s", plist)
+	}
+	if !loaded.Dashboard {
+		t.Error("dashboard choice was not persisted")
 	}
 	command, _ := os.ReadFile(s.Paths.Command())
 	if !strings.Contains(string(command), s.Paths.Binary()+`' "$@"`) {
 		t.Errorf("command:\n%s", command)
-	}
-	if _, err := os.Stat(previous); !os.IsNotExist(err) {
-		t.Errorf("legacy launcher left behind: %v", err)
 	}
 	if !reflect.DeepEqual(launchd.calls, []string{"bootstrap " + s.Paths.ServicePlist()}) {
 		t.Errorf("launchd calls %v", launchd.calls)
@@ -222,10 +233,10 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 		t.Fatalf("manifests %v", manifests)
 	}
 	var manifest map[string]string
-	raw, _ = os.ReadFile(manifests[0])
+	raw, _ := os.ReadFile(manifests[0])
 	_ = json.Unmarshal(raw, &manifest)
 	backup, _ := os.ReadFile(filepath.Join(filepath.Dir(manifests[0]), manifest[previous]))
-	if string(backup) != "previous launcher" {
+	if string(backup) != "previous command" {
 		t.Errorf("backup %q", backup)
 	}
 }
@@ -294,13 +305,15 @@ func TestInstallRejectsInvalidConfigBeforeChangingFiles(t *testing.T) {
 
 func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	s, launchd := testService(t)
-	launchd.loaded = true // an older installation is running
+	server := gateway(t, "fixture-key")
+	writeConfig(t, s, strings.TrimPrefix(server.URL, "http://"), "fixture-key")
+	launchd.loaded = true
 	launchd.bootstrap = errors.New("fixture bootstrap failure")
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper(legacyLauncher)
-	if err := os.WriteFile(previous, []byte("old launcher"), 0o755); err != nil {
+	previous := s.Paths.Command()
+	if err := os.WriteFile(previous, []byte("old command"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(s.Paths.Agent), 0o700); err != nil {
@@ -313,13 +326,13 @@ func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "did not become ready") {
 		t.Fatalf("unexpected error %v", err)
 	}
-	if data, _ := os.ReadFile(previous); string(data) != "old launcher" {
-		t.Errorf("launcher not restored: %q", data)
+	if data, _ := os.ReadFile(previous); string(data) != "old command" {
+		t.Errorf("command not restored: %q", data)
 	}
 	if data, _ := os.ReadFile(s.Paths.Agent); string(data) != "old plist" {
 		t.Errorf("agent not restored: %q", data)
 	}
-	for _, path := range []string{filepath.Join(s.Paths.Config, "client-key"), s.Paths.SettingsFile(), s.Paths.Command()} {
+	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist()} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}
@@ -341,7 +354,7 @@ func TestUninstallRemovesServiceAndKeepsCredentials(t *testing.T) {
 	if !reflect.DeepEqual(launchd.calls, []string{"bootout"}) {
 		t.Errorf("calls %v", launchd.calls)
 	}
-	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.SettingsFile(), s.Paths.Command(), s.Paths.Agent} {
+	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.Command(), s.Paths.Agent} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}
@@ -418,9 +431,10 @@ func TestLauncherAppliesLocalAuthAndPreservesArguments(t *testing.T) {
 	s, launchd := testService(t)
 	server := gateway(t, "fixture-local-key")
 	cfg := writeConfig(t, s, strings.TrimPrefix(server.URL, "http://"), "fixture-local-key")
-	settings, _ := Settings(cfg)
-	encoded, _ := encodeJSON(settings)
-	if err := os.WriteFile(s.Paths.SettingsFile(), encoded, 0o600); err != nil {
+	if err := os.MkdirAll(s.Paths.State, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Paths.ServicePlist(), []byte("installed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var gotPath string
@@ -440,9 +454,14 @@ func TestLauncherAppliesLocalAuthAndPreservesArguments(t *testing.T) {
 	if err := l.Run([]string{"--model", "sol", "--print", "fixture prompt"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"/fixture/claude", "--disallowedTools", "Artifact", "--settings", s.Paths.SettingsFile(), "--model", "gpt-5.6-sol", "--print", "fixture prompt"}
-	if gotPath != "/fixture/claude" || !reflect.DeepEqual(gotArgs, want) {
+	wantPrefix := []string{"/fixture/claude", "--disallowedTools", "Artifact", "--settings"}
+	wantSuffix := []string{"--model", "gpt-5.6-sol", "--print", "fixture prompt"}
+	if gotPath != "/fixture/claude" || len(gotArgs) != 9 || !reflect.DeepEqual(gotArgs[:4], wantPrefix) || !reflect.DeepEqual(gotArgs[5:], wantSuffix) {
 		t.Errorf("argv %v", gotArgs)
+	}
+	var passedSettings ClaudeSettings
+	if err := json.Unmarshal([]byte(gotArgs[4]), &passedSettings); err != nil || passedSettings.Model != cfg.Model {
+		t.Errorf("inline settings %q: %v", gotArgs[4], err)
 	}
 	env := map[string]string{}
 	for _, entry := range gotEnv {

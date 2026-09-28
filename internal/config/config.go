@@ -19,6 +19,7 @@ type Config struct {
 	ContextWindow           int    `json:"context_window"`
 	CompactWindow           int    `json:"compact_window"`
 	AutoModeClassifierModel string `json:"auto_mode_classifier_model,omitempty"`
+	Dashboard               bool   `json:"dashboard"`
 }
 
 func DefaultPath() string {
@@ -43,7 +44,7 @@ func Load(path string) (Config, error) {
 	data, errOpen := os.ReadFile(path)
 	if errOpen != nil {
 		if os.IsNotExist(errOpen) {
-			return cfg, fmt.Errorf("no config at %s; create one with: claudex init -config %q", path, path)
+			return cfg, fmt.Errorf("no config at %s; create one with: claudex ctl setup --config %q", path, path)
 		}
 		return cfg, errOpen
 	}

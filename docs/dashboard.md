@@ -1,6 +1,7 @@
 # Dashboard
 
-The `-dashboard` flag enables `/dashboard` on the existing loopback HTTP listener.
+`claudex ctl config dashboard on` enables `/dashboard` for the macOS service.
+The `-dashboard` flag does the same for a foreground run.
 The HTML page and an exact allowlist of embedded assets need no key.
 `GET /dashboard/api` requires the same client key as Claude Code requests.
 
