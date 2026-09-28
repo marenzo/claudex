@@ -112,6 +112,7 @@ windows change the generated values.
 | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` |
 | `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `1000000` |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | `900000` |
+| `CLAUDE_CODE_AUTO_MODE_SERVER` | `0`: use Claude Code's client-side auto-mode classifier |
 | `API_TIMEOUT_MS` | `600000` |
 
 Before applying its settings, the launcher removes inherited `ANTHROPIC_API_KEY`,

@@ -139,6 +139,9 @@ func TestSettingsNormalizeAliasesAndFamilies(t *testing.T) {
 	if _, ok := settings.Env["ANTHROPIC_AUTH_TOKEN"]; ok {
 		t.Error("settings file must not contain the client key")
 	}
+	if settings.Env["CLAUDE_CODE_AUTO_MODE_SERVER"] != "0" {
+		t.Error("Codex settings must select Claude Code's client-side classifier")
+	}
 	cfg.Model = "unknown-model"
 	if _, err := Settings(cfg); err == nil || !strings.Contains(err.Error(), "unsupported model") {
 		t.Errorf("unexpected error %v", err)
@@ -415,7 +418,7 @@ func TestLauncherAppliesLocalAuthAndPreservesArguments(t *testing.T) {
 	l := &Launcher{Service: s,
 		LookPath: func(string) (string, error) { return "/fixture/claude", nil },
 		Environ: func() []string {
-			return []string{"PATH=/fixture/bin", "KEEP_ME=yes", "ANTHROPIC_API_KEY=old", "CLAUDE_CODE_OAUTH_TOKEN=old", "CLAUDE_CODE_USE_BEDROCK=1"}
+			return []string{"PATH=/fixture/bin", "KEEP_ME=yes", "ANTHROPIC_API_KEY=old", "CLAUDE_CODE_OAUTH_TOKEN=old", "CLAUDE_CODE_USE_BEDROCK=1", "CLAUDE_CODE_AUTO_MODE_SERVER=1"}
 		},
 		Exec: func(path string, argv, env []string) error { gotPath, gotArgs, gotEnv = path, argv, env; return nil }}
 	if err := l.Run([]string{"--help"}); err != nil {
@@ -438,6 +441,9 @@ func TestLauncherAppliesLocalAuthAndPreservesArguments(t *testing.T) {
 	}
 	if env["ANTHROPIC_AUTH_TOKEN"] != "fixture-local-key" || env["ANTHROPIC_API_KEY"] != "" || env["KEEP_ME"] != "yes" || env["ANTHROPIC_MODEL"] != "gpt-6-astra" {
 		t.Errorf("env %v", env)
+	}
+	if env["CLAUDE_CODE_AUTO_MODE_SERVER"] != "0" {
+		t.Error("launcher did not override unsupported server-side classifier setting")
 	}
 	for _, name := range []string{"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK"} {
 		if _, ok := env[name]; ok {
