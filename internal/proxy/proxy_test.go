@@ -282,7 +282,7 @@ func TestMissingSignInMessageIsActionableAndPathFree(t *testing.T) {
 	}
 	w := request(s, "/v1/messages", `{"model":"gpt-6-astra","messages":[{"role":"user","content":"hello"}]}`)
 	body := w.Body.String()
-	if w.Code != 401 || !strings.Contains(body, "claudex login") || strings.Contains(body, s.Config.AuthFile) {
+	if w.Code != 401 || !strings.Contains(body, "claudex ctl setup --login") || strings.Contains(body, s.Config.AuthFile) {
 		t.Fatalf("%d %s", w.Code, body)
 	}
 }

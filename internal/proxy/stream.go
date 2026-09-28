@@ -69,7 +69,7 @@ func readEvents(ctx context.Context, body io.Reader, events chan<- streamEvent) 
 	}
 }
 
-func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *dashboard.Request, inputTokens func() (int64, error)) int {
+func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *dashboard.Request, inputTokens func() (int64, error), review *safeguardReview) int {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	events := make(chan streamEvent, 1)
@@ -142,6 +142,29 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 		}
 		return fail(e)
 	}
+	finishReview := func() ([]any, int) {
+		type outcome struct {
+			verdicts map[string]toolVerdict
+			err      error
+		}
+		done := make(chan outcome, 1)
+		go func() { verdicts, err := s.classifyTools(ctx, review, account); done <- outcome{verdicts, err} }()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, 499
+			case <-ping.C:
+				if stream && !write([]byte("event: ping\ndata: {\"type\":\"ping\"}\n\n")) {
+					return nil, 499
+				}
+			case result := <-done:
+				if result.err != nil {
+					return nil, fail(&apiError{Status: 502, Type: "api_error", Message: "Auto-mode safety review failed; no tool calls were released. Retry or use client-side classification."})
+				}
+				return safeguardResults(result.verdicts), 0
+			}
+		}
+	}
 	// Translate the bounded handshake batch before committing headers so a
 	// failure in the first content event retains its HTTP error status.
 	emit := func(batch [][]byte) int {
@@ -173,6 +196,12 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			chunks = append(chunks, chunk)
 		}
 		for _, chunk := range chunks {
+			if review != nil {
+				if err := review.hold(chunk); err != nil {
+					return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
+				}
+				continue
+			}
 			if !write(chunk) {
 				return 499
 			}
@@ -185,7 +214,7 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			record.ErrorKind = "canceled"
 			return 499
 		case <-ping.C:
-			if started && !write([]byte("event: ping\ndata: {\"type\":\"ping\"}\n\n")) {
+			if stream && (started || review != nil) && !write([]byte("event: ping\ndata: {\"type\":\"ping\"}\n\n")) {
 				return 499
 			}
 		case <-idle.C:
@@ -279,6 +308,16 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 					if err != nil {
 						return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
 					}
+					if review != nil {
+						if err := review.readMessage(result); err != nil {
+							return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
+						}
+						results, status := finishReview()
+						if status != 0 {
+							return status
+						}
+						result, _ = sjson.SetBytes(result, "safeguard_results", results)
+					}
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(200)
 					if _, errWrite := w.Write(result); errWrite != nil {
@@ -301,6 +340,17 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			}
 			pending = nil
 			if terminal {
+				if review != nil {
+					results, status := finishReview()
+					if status != 0 {
+						return status
+					}
+					for _, chunk := range review.chunks {
+						if !write(attachSafeguards(chunk, results)) {
+							return 499
+						}
+					}
+				}
 				return 200
 			}
 		}

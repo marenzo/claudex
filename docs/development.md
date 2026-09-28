@@ -10,7 +10,7 @@ make check                         # Go tests, dashboard JS syntax/tests, vet, g
 make lint                          # staticcheck and govulncheck; needs network
 make test-dashboard                # only dashboard syntax and built-in Node tests
 make build                         # dist/claudex
-./dist/claudex version
+./dist/claudex ctl --version
 make package                       # archive for this OS/architecture in dist/
 ```
 

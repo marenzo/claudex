@@ -35,7 +35,7 @@ func TestClientCancellationWinsOverReaderFailure(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		r := httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
 		record := &dashboard.Request{Started: time.Now()}
-		status := (&Server{}).consume(httptest.NewRecorder(), r, cancelingStreamReader{cancel}, nil, nil, "", true, record, nil)
+		status := (&Server{}).consume(httptest.NewRecorder(), r, cancelingStreamReader{cancel}, nil, nil, "", true, record, nil, nil)
 		cancel()
 		if status != 499 || record.ErrorKind != "canceled" {
 			t.Fatalf("client cancellation reported as %d / %s", status, record.ErrorKind)
@@ -57,7 +57,7 @@ func TestClientCancellationWinsOverUpstreamErrorEvent(t *testing.T) {
 			w := &trackedResponseWriter{ResponseRecorder: httptest.NewRecorder()}
 			s := &Server{}
 			body := cancellationBody{cancel: cancel, body: sse(event), err: io.EOF}
-			status := s.consume(w, r, body, nil, nil, "test-account", true, record, nil)
+			status := s.consume(w, r, body, nil, nil, "test-account", true, record, nil, nil)
 			cancel()
 			if status != 499 || record.ErrorKind != "canceled" || record.Error != nil || w.writes != 0 {
 				t.Fatalf("canceled error event became a failure: %d / %+v", status, record)
@@ -133,7 +133,9 @@ func TestStalledUpstreamStreamFailsInsteadOfHanging(t *testing.T) {
 	record := &dashboard.Request{Started: time.Now()}
 	w := httptest.NewRecorder()
 	done := make(chan int, 1)
-	go func() { done <- (&Server{}).consume(w, r, blockingReader{ctx: ctx}, nil, nil, "", true, record, nil) }()
+	go func() {
+		done <- (&Server{}).consume(w, r, blockingReader{ctx: ctx}, nil, nil, "", true, record, nil, nil)
+	}()
 	select {
 	case status := <-done:
 		if status != 502 || record.ErrorKind != "upstream_stalled" {

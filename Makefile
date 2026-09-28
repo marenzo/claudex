@@ -35,7 +35,7 @@ lint:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 install: build
-	./dist/claudex install $(INSTALL_FLAGS)
+	./dist/claudex ctl setup $(INSTALL_FLAGS)
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t $(IMAGE) .

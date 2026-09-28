@@ -16,7 +16,7 @@ flowchart LR
 
 ## Request lifecycle
 
-1. The launcher starts the macOS service, loads generated Claude settings, and
+1. The launcher starts the macOS service, derives Claude settings from config, and
    injects the client key. Claude Code never receives the Codex sign-in token.
 2. Claudex authenticates the request and bounds its body. It resolves the requested
    model and translates Claude system prompts, messages, and tools to Codex
@@ -51,19 +51,25 @@ checked on its own.
 | `POST /v1/messages/count_tokens` | Local token estimate |
 | `GET /v1/models` | Model list |
 | `GET /v1/models/{id}` | One model |
-| `GET /dashboard/api` | Dashboard metrics, only with `-dashboard` |
+| `GET /dashboard/api` | Dashboard metrics when enabled |
+| `GET /_claudex/status` | Authenticated gateway state for `claudex ctl` |
+| `POST /_claudex/drain` | Acquire or renew a short lease while waiting for active requests |
+| `DELETE /_claudex/drain` | Release a drain lease |
 
 These routes need no key:
 
 | Route | Purpose |
 | --- | --- |
-| `GET /healthz` | Liveness probe for Docker, launchd, and `claudex status` |
+| `GET /healthz` | Liveness probe for Docker, launchd, and `claudex ctl` |
 | `HEAD /api/hello` | Connectivity probe for Claude Code |
-| `GET /dashboard` and its embedded assets | Dashboard login page, only with `-dashboard` |
+| `GET /dashboard` and its embedded assets | Dashboard login page when enabled |
 
 `GET /healthz` returns JSON with `product`, `status`, `version`, and the default
-`model`. `product` is always `claudex`. Without `-dashboard`, no dashboard routes
-exist.
+`model`. `product` is always `claudex`. The dashboard setting is persisted in
+config; a foreground run can override it with `-dashboard`. When disabled, no
+dashboard routes exist. A drain lease briefly rejects new generation requests
+with retryable HTTP 503 while existing requests finish; it expires if the
+controlling command exits unexpectedly.
 
 ## Reasoning and tools
 

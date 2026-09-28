@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -11,21 +12,18 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"bogus"}, "unknown command"},
-		{[]string{"-init"}, "unknown command"},
-		{[]string{"run", "typo"}, "usage: claudex run"},
-		{[]string{"run", "-bogus"}, "usage: claudex run"},
-		{[]string{"init", "extra"}, "usage: claudex init"},
-		{[]string{"login", "-bogus"}, "usage: claudex login"},
-		{[]string{"setup", "extra"}, "usage: claudex setup"},
-		{[]string{"install", "-bogus"}, "usage: claudex install"},
-		{[]string{"install", "extra"}, "usage: claudex install"},
-		{[]string{"stop", "extra"}, "usage: claudex stop"},
-		{[]string{"status", "-bogus"}, "usage: claudex status"},
-		{[]string{"version", "extra"}, "usage: claudex version"},
-		{[]string{"uninstall", "extra"}, "usage: claudex uninstall"},
+		{[]string{"bogus"}, "unknown control command"},
+		{[]string{"run", "typo"}, "usage: claudex ctl run"},
+		{[]string{"run", "-bogus"}, "usage: claudex ctl run"},
+		{[]string{"setup", "extra"}, "usage: claudex ctl setup"},
+		{[]string{"config", "extra", "more", "args"}, "usage: claudex ctl config"},
+		{[]string{"logs", "extra"}, "usage: claudex ctl logs"},
+		{[]string{"stop", "extra"}, "usage: claudex ctl stop"},
+		{[]string{"--version", "extra"}, "usage: claudex ctl --version"},
+		{[]string{"uninstall", "extra"}, "usage: claudex ctl uninstall"},
+		{[]string{"--bogus"}, "usage: claudex ctl ["},
 	} {
-		err := dispatch(test.args)
+		err := command(test.args)
 		var misuse usageError
 		if !errors.As(err, &misuse) || !strings.Contains(err.Error(), test.want) {
 			t.Errorf("%q: got %v, want a usage error containing %q", test.args, err, test.want)
@@ -34,9 +32,19 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 }
 
 func TestHelpIsNotAnError(t *testing.T) {
-	for _, args := range [][]string{nil, {"help"}, {"--help"}, {"install", "-help"}, {"run", "-h"}} {
-		if err := dispatch(args); err != nil {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}} {
+		if err := dispatch(append([]string{"ctl"}, args...)); err != nil {
 			t.Errorf("%q: %v", args, err)
+		}
+	}
+}
+
+func TestOverviewAcceptsItsFlagsFirst(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "config.json")
+	for _, args := range [][]string{{"--config", missing}, {"-verbose", "--config", missing}, {"--json", "--config=" + missing}} {
+		var misuse usageError
+		if err := command(args); errors.As(err, &misuse) {
+			t.Errorf("%q: rejected as usage error: %v", args, err)
 		}
 	}
 }

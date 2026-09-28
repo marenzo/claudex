@@ -87,7 +87,7 @@ func TestStatusReportsActionableProblems(t *testing.T) {
 			t.Errorf("%s = %q, want %q\n%s", name, levels[name], level, out.String())
 		}
 	}
-	if !strings.Contains(out.String(), "claudex login") {
+	if !strings.Contains(out.String(), "claudex ctl setup --login") {
 		t.Errorf("sign-in failure lacks a next step:\n%s", out.String())
 	}
 }
@@ -101,7 +101,7 @@ func TestStatusWithoutConfig(t *testing.T) {
 	if levels["config"] != LevelFail || levels["gateway"] != "" || levels["codex sign-in"] != "" {
 		t.Fatalf("checks after a missing config: %+v", checks)
 	}
-	if !strings.Contains(checks[0].Detail, "claudex init") {
+	if !strings.Contains(checks[0].Detail, "claudex ctl setup") {
 		t.Errorf("config failure lacks a next step: %q", checks[0].Detail)
 	}
 }

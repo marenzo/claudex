@@ -1,5 +1,5 @@
 // Package launcher installs and manages the macOS user service and starts
-// Claude Code against the local gateway. It replaces the former Python scripts.
+// Claude Code against the local gateway.
 package launcher
 
 import (
@@ -36,40 +36,12 @@ func DefaultPaths() (Paths, error) {
 
 func (p Paths) Binary() string       { return filepath.Join(p.State, "bin", "claudex") }
 func (p Paths) ConfigFile() string   { return filepath.Join(p.Config, "config.json") }
-func (p Paths) SettingsFile() string { return filepath.Join(p.Config, "claude-settings.json") }
 func (p Paths) ServicePlist() string { return filepath.Join(p.State, "service.plist") }
 func (p Paths) LogFile() string      { return filepath.Join(p.State, "logs", "service.log") }
 func (p Paths) Backups() string      { return filepath.Join(p.State, "backups") }
+
+// Command is the claudex shim on PATH that runs the installed binary.
+func (p Paths) Command() string { return p.Wrapper("claudex") }
 func (p Paths) Wrapper(name string) string {
 	return filepath.Join(p.Bin, name)
-}
-
-// atomicWrite replaces path with data using a private temporary file.
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	cleanup := func(err error) error {
-		_ = temporary.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if _, err := temporary.Write(data); err != nil {
-		return cleanup(err)
-	}
-	if err := temporary.Chmod(mode); err != nil {
-		return cleanup(err)
-	}
-	if err := temporary.Close(); err != nil {
-		return cleanup(err)
-	}
-	if err := os.Rename(name, path); err != nil {
-		return cleanup(err)
-	}
-	return nil
 }
