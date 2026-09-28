@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/marenzo/claudex/internal/config"
@@ -131,7 +132,9 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	if err = atomicWrite(p.SettingsFile(), encodedSettings, 0o600); err != nil {
 		return err
 	}
-	command := fmt.Sprintf("#!/bin/sh\nexec %q \"$@\"\n", p.Binary())
+	// Quote for the shell, not Go: double quotes still expand dollars and backticks.
+	quotedBinary := "'" + strings.ReplaceAll(p.Binary(), "'", "'\"'\"'") + "'"
+	command := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", quotedBinary)
 	if err = atomicWrite(p.Command(), []byte(command), 0o755); err != nil {
 		return err
 	}

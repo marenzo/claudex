@@ -17,15 +17,16 @@ required.
 Download the archive for your platform from the
 [releases page](https://github.com/marenzo/claudex/releases) and unpack it, or
 [build from source](#build-from-source). The single `claudex` binary is all you
-need at runtime.
+need at runtime. Both the archive and source build place it at `dist/claudex`.
 
 ## Quick start
 
 ### macOS
 
 ```sh
-claudex setup    # init + login + install the launchd service
-claudex launch   # start Claude Code through the gateway
+./dist/claudex setup              # init + login + install the launchd service
+export PATH="$HOME/.local/bin:$PATH"
+claudex launch                    # start Claude Code through the gateway
 ```
 
 `setup` is the same as running `claudex init`, `claudex login`, and
@@ -36,9 +37,9 @@ claudex launch   # start Claude Code through the gateway
 The service installer is macOS-only. Run the gateway in the foreground instead:
 
 ```sh
-claudex init
-claudex login
-claudex run
+./dist/claudex init
+./dist/claudex login
+./dist/claudex run
 ```
 
 Then point Claude Code at it from a second terminal with the environment shown in

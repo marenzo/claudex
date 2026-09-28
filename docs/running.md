@@ -6,14 +6,15 @@ Linux and macOS run the Go gateway directly. Download the archive for your
 platform from the [GitHub releases](https://github.com/marenzo/claudex/releases)
 and unpack it. You can also build from source with
 `make build`, which writes `dist/claudex`. The single `claudex` binary is all you
-need at runtime.
+need at runtime. Both options place it at `dist/claudex`; use that path until
+you have installed the command on PATH.
 
 ```sh
-claudex init
-claudex login
-claudex run                      # foreground; Ctrl-C stops it
+./dist/claudex init
+./dist/claudex login
+./dist/claudex run               # foreground; Ctrl-C stops it
 # Or enable the optional dashboard:
-claudex run -dashboard
+./dist/claudex run -dashboard
 ```
 
 `init` creates a private config and a random client key. It never overwrites an

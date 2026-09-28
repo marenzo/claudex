@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -194,7 +195,7 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 		t.Errorf("plist:\n%s", plist)
 	}
 	command, _ := os.ReadFile(s.Paths.Command())
-	if !strings.Contains(string(command), s.Paths.Binary()+`" "$@"`) {
+	if !strings.Contains(string(command), s.Paths.Binary()+`' "$@"`) {
 		t.Errorf("command:\n%s", command)
 	}
 	if _, err := os.Stat(previous); !os.IsNotExist(err) {
@@ -237,6 +238,28 @@ func TestInstallFreshCreatesKeyAndSkipsStart(t *testing.T) {
 	}
 	if plist, _ := os.ReadFile(s.Paths.ServicePlist()); strings.Contains(string(plist), "-dashboard") {
 		t.Error("dashboard enabled without flag")
+	}
+}
+
+func TestInstalledCommandPreservesPathArgumentsAndExitStatus(t *testing.T) {
+	s, _ := testService(t)
+	s.Paths.State = filepath.Join(t.TempDir(), "state with 'quotes' $CLAUDEX_SHIM_TEST `false` $(false)")
+	t.Setenv("CLAUDEX_SHIM_TEST", "expanded")
+	source := filepath.Join(t.TempDir(), "claudex")
+	if err := os.WriteFile(source, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\nexit 23\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(s, InstallOptions{Source: source, NoStart: true}); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"launch", "--model", "sol", "two words", "", "$(false)", "'quoted'"}
+	out, err := exec.Command(s.Paths.Command(), args...).CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 23 {
+		t.Fatalf("command exit: %v; output: %s", err, out)
+	}
+	if want := strings.Join(args, "\n") + "\n"; string(out) != want {
+		t.Errorf("arguments = %q, want %q", out, want)
 	}
 }
 
@@ -283,7 +306,7 @@ func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	if data, _ := os.ReadFile(s.Paths.Agent); string(data) != "old plist" {
 		t.Errorf("agent not restored: %q", data)
 	}
-	for _, path := range []string{filepath.Join(s.Paths.Config, "client-key"), s.Paths.SettingsFile()} {
+	for _, path := range []string{filepath.Join(s.Paths.Config, "client-key"), s.Paths.SettingsFile(), s.Paths.Command()} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}
