@@ -18,16 +18,6 @@ identical.
   supports it. Astra gets its minimum, `low`, which does not mean zero reasoning.
   Hidden summaries still keep encrypted continuity. An explicit effort the model
   does not support fails with an error.
-- **Auto mode uses client-side classifier requests.** Codex does not provide
-  Anthropic's server-side `safeguard_results`, so the launcher sets
-  `CLAUDE_CODE_AUTO_MODE_SERVER=0`, as the
-  [Claude Code guidance](https://code.claude.com/docs/en/auto-mode-classifier-billing)
-  recommends for gateways without server review. Auto-mode checks remain active,
-  and classifier requests still consume normal usage; this does not enable
-  Anthropic's no-charge server checks. Reinstall to regenerate launcher settings
-  and start a new session. For a portable or Docker gateway, set the variable in
-  the shell that starts Claude Code. This upstream setting is temporary and may
-  be removed in a future Claude Code release.
 - **Some generation controls are not forwarded.** `max_tokens`, `temperature`,
   `top_p`, and `stop_sequences` lose their Anthropic meaning. Do not rely on them to
   limit spend, response length, sampling, or stopping.

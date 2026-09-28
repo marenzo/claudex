@@ -44,10 +44,7 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 		"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS":             strconv.Itoa(cfg.ContextWindow),
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            strconv.Itoa(cfg.CompactWindow),
-		// Codex cannot return Anthropic safeguard_results. Keep auto mode's
-		// client-side classifier checks instead of requesting server review.
-		"CLAUDE_CODE_AUTO_MODE_SERVER": "0",
-		"API_TIMEOUT_MS":               "600000",
+		"API_TIMEOUT_MS":                             "600000",
 	}
 	for family, alias := range Families {
 		target, _ := config.FindModel(alias)
