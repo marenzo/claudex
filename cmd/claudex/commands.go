@@ -34,7 +34,7 @@ Commands:
   status       Check config, sign-in, gateway, and service
   models       List models from the running gateway
   launch       Start Claude Code through the gateway (macOS)
-  uninstall    Remove the installed service and wrappers (macOS)
+  uninstall    Remove the installed service and command (macOS)
   version      Print build version
   help         Show this help
 

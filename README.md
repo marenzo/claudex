@@ -25,7 +25,7 @@ need at runtime.
 
 ```sh
 claudex setup    # init + login + install the launchd service
-claude-gpt       # start Claude Code through the gateway
+claudex launch   # start Claude Code through the gateway
 ```
 
 `setup` is the same as running `claudex init`, `claudex login`, and
@@ -61,8 +61,8 @@ Each Claude model family maps to a GPT model:
 The default is Astra with `high` effort. Override either per session:
 
 ```sh
-claude-gpt --model sol
-claude-gpt --effort max
+claudex launch --model sol
+claudex launch --effort max
 ```
 
 To change the defaults, edit `model` and `reasoning_effort` in the config, then

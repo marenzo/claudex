@@ -21,8 +21,9 @@ type InstallOptions struct {
 }
 
 // Install copies the gateway into the user's state directory, writes the
-// config, Claude settings, command wrappers and launchd agent, then starts the
-// service. Every replaced file is backed up first; a failure restores it.
+// config, Claude settings, the claudex command on PATH and launchd agent, then
+// starts the service. Every replaced file is backed up first; a failure
+// restores it.
 func Install(s *Service, opts InstallOptions) (err error) {
 	if goos != "darwin" {
 		return errors.New("the service installer supports macOS; run claudex directly or use Docker elsewhere")
@@ -59,7 +60,7 @@ func Install(s *Service, opts InstallOptions) (err error) {
 		return err
 	}
 	targets := []string{p.Binary(), p.ServicePlist(), p.ConfigFile(), p.SettingsFile(),
-		p.Wrapper("claude-gpt"), p.Agent}
+		p.Command(), p.Wrapper(legacyLauncher), p.Agent}
 	if _, err := os.Stat(cfg.ClientKeyFile); err != nil {
 		targets = append(targets, cfg.ClientKeyFile)
 	}
@@ -130,9 +131,12 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	if err = atomicWrite(p.SettingsFile(), encodedSettings, 0o600); err != nil {
 		return err
 	}
-	wrapper := fmt.Sprintf("#!/bin/sh\nexec %q launch \"$@\"\n", p.Binary())
-	if err = atomicWrite(p.Wrapper("claude-gpt"), []byte(wrapper), 0o755); err != nil {
+	command := fmt.Sprintf("#!/bin/sh\nexec %q \"$@\"\n", p.Binary())
+	if err = atomicWrite(p.Command(), []byte(command), 0o755); err != nil {
 		return err
+	}
+	if errRemove := os.Remove(p.Wrapper(legacyLauncher)); errRemove != nil && !os.IsNotExist(errRemove) {
+		return errRemove
 	}
 	if err = os.MkdirAll(filepath.Dir(p.LogFile()), 0o700); err != nil {
 		return err
@@ -149,7 +153,7 @@ func Install(s *Service, opts InstallOptions) (err error) {
 			return err
 		}
 	}
-	fmt.Fprintf(s.Out, "Installed. Ensure %s is on PATH, then run: claude-gpt\n", p.Bin)
+	fmt.Fprintf(s.Out, "Installed. Ensure %s is on PATH, then run: claudex launch\n", p.Bin)
 	if _, errStat := os.Stat(cfg.AuthFile); errStat != nil {
 		fmt.Fprintln(s.Out, "Sign in first: claudex login")
 	}
@@ -160,7 +164,7 @@ func Install(s *Service, opts InstallOptions) (err error) {
 	return nil
 }
 
-// Uninstall removes the installed service, binary, and wrappers. It keeps
+// Uninstall removes the installed service, binary, and claudex command. It keeps
 // config and credentials so a reinstall picks them back up.
 func Uninstall(s *Service) error {
 	if goos != "darwin" {
@@ -176,7 +180,8 @@ func Uninstall(s *Service) error {
 		p.Binary(),
 		p.ServicePlist(),
 		p.SettingsFile(),
-		p.Wrapper("claude-gpt"),
+		p.Command(),
+		p.Wrapper(legacyLauncher),
 		p.Wrapper("claudex-service"),
 		p.Agent,
 	} {

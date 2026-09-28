@@ -67,7 +67,7 @@ gateway, macOS service, and Claude Code without changing anything. Fix the first
 
 **Invalid client key.** Claude Code sent a missing or wrong client key. The gateway
 logs `request rejected` with `reason` `invalid_client_key`. Use the value in
-`client_key_file`, never a Codex token. On macOS, start a new `claude-gpt` session.
+`client_key_file`, never a Codex token. On macOS, start a new `claudex launch` session.
 Otherwise check `ANTHROPIC_AUTH_TOKEN`.
 
 **A model is unavailable or rate-limited.** Check `claudex status` and pick
@@ -93,7 +93,7 @@ the underlying error.
 **The Codex sign-in switched to a different account.** A refresh during the request
 returned another account, so the gateway did not retry it. Retry the request.
 
-**The old model mapping is still used.** Start a fresh `claude-gpt` session.
+**The old model mapping is still used.** Start a fresh `claudex launch` session.
 Existing sessions can keep environment values that already resolved a family name.
 
 **Codex stream was interrupted.** The gateway could not read the upstream response

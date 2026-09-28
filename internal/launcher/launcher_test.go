@@ -164,7 +164,7 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper("claude-gpt")
+	previous := s.Paths.Wrapper(legacyLauncher)
 	if err := os.WriteFile(previous, []byte("previous launcher"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -193,9 +193,12 @@ func TestInstallWritesEverythingAndStartsService(t *testing.T) {
 	if !strings.Contains(string(plist), "<string>-dashboard</string>") || !strings.Contains(string(plist), Label) {
 		t.Errorf("plist:\n%s", plist)
 	}
-	wrapper, _ := os.ReadFile(s.Paths.Wrapper("claude-gpt"))
-	if !strings.Contains(string(wrapper), s.Paths.Binary()+`" launch "$@"`) {
-		t.Errorf("wrapper:\n%s", wrapper)
+	command, _ := os.ReadFile(s.Paths.Command())
+	if !strings.Contains(string(command), s.Paths.Binary()+`" "$@"`) {
+		t.Errorf("command:\n%s", command)
+	}
+	if _, err := os.Stat(previous); !os.IsNotExist(err) {
+		t.Errorf("legacy launcher left behind: %v", err)
 	}
 	if !reflect.DeepEqual(launchd.calls, []string{"bootstrap " + s.Paths.ServicePlist()}) {
 		t.Errorf("launchd calls %v", launchd.calls)
@@ -260,7 +263,7 @@ func TestFailedStartRestoresPreviousFilesAndService(t *testing.T) {
 	if err := os.MkdirAll(s.Paths.Bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	previous := s.Paths.Wrapper("claude-gpt")
+	previous := s.Paths.Wrapper(legacyLauncher)
 	if err := os.WriteFile(previous, []byte("old launcher"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +305,7 @@ func TestUninstallRemovesServiceAndKeepsCredentials(t *testing.T) {
 	if !reflect.DeepEqual(launchd.calls, []string{"bootout"}) {
 		t.Errorf("calls %v", launchd.calls)
 	}
-	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.SettingsFile(), s.Paths.Wrapper("claude-gpt"), s.Paths.Agent} {
+	for _, path := range []string{s.Paths.Binary(), s.Paths.ServicePlist(), s.Paths.SettingsFile(), s.Paths.Command(), s.Paths.Agent} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("%s left behind", path)
 		}

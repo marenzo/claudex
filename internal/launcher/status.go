@@ -147,7 +147,7 @@ func (s *Status) claude() Check {
 	if info, err := os.Stat(native); err == nil && info.Mode().Perm()&0o111 != 0 {
 		return Check{LevelOK, "claude code", native}
 	}
-	return Check{LevelWarn, "claude code", "claude is not on PATH; install Claude Code to use claude-gpt"}
+	return Check{LevelWarn, "claude code", "claude is not on PATH; install Claude Code to use claudex launch"}
 }
 
 // PrintChecks writes aligned check lines and reports whether any check failed.

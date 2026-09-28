@@ -69,8 +69,8 @@ history. Neither window changes the model's server-side limits.
 | `claudex restart` | Restart the installed service |
 | `claudex status [-config PATH]` | Check the setup without changing it. See [checking an installation](running.md#check-an-installation). |
 | `claudex models` | List models from the running gateway |
-| `claudex launch [claude args]` | Start the installed `claude` through the gateway. `claude-gpt` runs this. |
-| `claudex uninstall` | Remove the installed service, binary, and wrappers |
+| `claudex launch [claude args]` | Start the installed `claude` through the gateway |
+| `claudex uninstall` | Remove the installed service, binary, and `claudex` command |
 | `claudex version` | Print version, commit, and build date |
 
 ## Flags
@@ -91,9 +91,9 @@ status 1. Once the gateway is serving, it writes JSON log lines.
 
 ## macOS launcher overrides
 
-`claude-gpt` runs `claudex launch`. It inherits unrelated environment variables and
-applies the values below. The table shows defaults. Your configured model, effort,
-listener, and windows change the generated values.
+`claudex launch` inherits unrelated environment variables and applies the values
+below. The table shows defaults. Your configured model, effort, listener, and
+windows change the generated values.
 
 | Variable | Value |
 | --- | --- |
