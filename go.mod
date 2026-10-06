@@ -3,7 +3,7 @@ module github.com/marenzo/claudex
 go 1.27.1
 
 require (
-	github.com/tidwall/gjson v1.19.0
+	github.com/tidwall/gjson v1.19.1
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.8.1
 )
