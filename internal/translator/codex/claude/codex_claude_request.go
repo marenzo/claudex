@@ -117,12 +117,6 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 				contentItems = append(contentItems, content)
 			}
 
-			appendDocumentContent := func(dataURL string) {
-				content := []byte(`{"type":"input_file","file_data":"","filename":"document.pdf"}`)
-				content, _ = sjson.SetBytes(content, "file_data", dataURL)
-				contentItems = append(contentItems, content)
-			}
-
 			appendReasoningContent := func(part gjson.Result) {
 				if messageRole != "assistant" {
 					return
@@ -177,21 +171,7 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 							inputItems = append(inputItems, pendingSystemReminders...)
 							pendingSystemReminders = nil
 						}
-						sourceResult := messageContentResult.Get("source")
-						if sourceResult.Get("type").String() != "base64" {
-							continue
-						}
-						mediaType := strings.TrimSpace(sourceResult.Get("media_type").String())
-						if !strings.EqualFold(mediaType, "application/pdf") {
-							continue
-						}
-						data := sourceResult.Get("data").String()
-						if data == "" {
-							data = sourceResult.Get("base64").String()
-						}
-						if data != "" {
-							appendDocumentContent(fmt.Sprintf("data:%s;base64,%s", mediaType, data))
-						}
+						contentItems = append(contentItems, codexDocumentContent(messageContentResult)...)
 					case "tool_use":
 						flushMessage()
 						if id := messageContentResult.Get("id").String(); id != "" {
@@ -227,6 +207,8 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 										toolResultContent, _ = sjson.SetBytes(toolResultContent, "image_url", imageURL)
 										toolResultContentItems = append(toolResultContentItems, toolResultContent)
 									}
+								} else if toolResultContentType == "document" {
+									toolResultContentItems = append(toolResultContentItems, codexDocumentContent(contentResults[k])...)
 								} else if toolResultContentType == "text" {
 									toolResultContent := []byte(`{"type":"input_text","text":""}`)
 									toolResultContent, _ = sjson.SetBytes(toolResultContent, "text", contentResults[k].Get("text").String())
@@ -270,6 +252,15 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 
 	// Convert tools declarations to the expected format for the Codex API.
 	toolsResult := rootResult.Get("tools")
+	if catalog, err := ResolveToolCatalog(rawJSON); err == nil {
+		var declarations [][]byte
+		for _, tool := range catalog {
+			if !strings.EqualFold(tool.Get("name").String(), "Artifact") {
+				declarations = append(declarations, []byte(tool.Raw))
+			}
+		}
+		toolsResult = gjson.ParseBytes(translatorcommon.JoinRawArray(declarations))
+	}
 	var toolItems [][]byte
 	if toolsResult.IsArray() {
 		webSearchToolNames := buildClaudeWebSearchToolNameSet(toolsResult)
@@ -279,7 +270,7 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 		for i := 0; i < len(toolResults); i++ {
 			toolResult := toolResults[i]
 			// Special handling: map Claude web search tool to Codex web_search
-			if isClaudeWebSearchToolType(toolResult.Get("type").String()) {
+			if isClaudeWebSearchToolType(toolResult.Get("type").String()) || toolResult.Get("name").String() == "WebSearch" {
 				toolItems = append(toolItems, convertClaudeWebSearchToolToCodex(toolResult))
 				continue
 			}
@@ -361,6 +352,38 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 	template = translatorcommon.SetRawArrayItems(template, "input", inputItems)
 
 	return template
+}
+
+// Documents can appear directly or inside a mixed Read tool result.
+func codexDocumentContent(document gjson.Result) [][]byte {
+	var parts [][]byte
+	if title, context := document.Get("title").String(), document.Get("context").String(); title != "" || context != "" {
+		note := []byte(`{"type":"input_text","text":""}`)
+		note, _ = sjson.SetBytes(note, "text", "Document title: "+title+"\nDocument context: "+context)
+		parts = append(parts, note)
+	}
+	source := document.Get("source")
+	switch source.Get("type").String() {
+	case "text":
+		part := []byte(`{"type":"input_text","text":""}`)
+		part, _ = sjson.SetBytes(part, "text", source.Get("data").String())
+		parts = append(parts, part)
+	case "base64":
+		if !strings.EqualFold(strings.TrimSpace(source.Get("media_type").String()), "application/pdf") {
+			return parts
+		}
+		data := source.Get("data").String()
+		if data == "" {
+			data = source.Get("base64").String()
+		}
+		if data == "" {
+			return parts
+		}
+		part := []byte(`{"type":"input_file","file_data":"","filename":"document.pdf"}`)
+		part, _ = sjson.SetBytes(part, "file_data", "data:application/pdf;base64,"+data)
+		parts = append(parts, part)
+	}
+	return parts
 }
 
 // Keep remote image URLs intact; the upstream handles fetching them just as it
@@ -450,7 +473,7 @@ func buildClaudeWebSearchToolNameSet(tools gjson.Result) map[string]struct{} {
 
 	tools.ForEach(func(_, tool gjson.Result) bool {
 		toolType := tool.Get("type").String()
-		if !isClaudeWebSearchToolType(toolType) {
+		if !isClaudeWebSearchToolType(toolType) && tool.Get("name").String() != "WebSearch" {
 			return true
 		}
 
@@ -506,6 +529,9 @@ func convertClaudeWebSearchToolToCodex(tool gjson.Result) []byte {
 	out := []byte(`{"type":"web_search"}`)
 	if allowedDomains := tool.Get("allowed_domains"); allowedDomains.Exists() && allowedDomains.IsArray() {
 		out, _ = sjson.SetRawBytes(out, "filters.allowed_domains", []byte(allowedDomains.Raw))
+	}
+	if blockedDomains := tool.Get("blocked_domains"); blockedDomains.IsArray() {
+		out, _ = sjson.SetRawBytes(out, "filters.blocked_domains", []byte(blockedDomains.Raw))
 	}
 	if userLocation := tool.Get("user_location"); userLocation.Exists() && userLocation.IsObject() {
 		out, _ = sjson.SetRawBytes(out, "user_location", []byte(userLocation.Raw))
@@ -571,21 +597,27 @@ func buildShortNameMap(names []string) map[string]string {
 
 // buildReverseMapFromClaudeOriginalToShort builds original->short map, used to map tool_use names to short.
 func buildReverseMapFromClaudeOriginalToShort(original []byte) map[string]string {
-	tools := gjson.GetBytes(original, "tools")
-	m := map[string]string{}
-	if !tools.IsArray() {
-		return m
-	}
+	root := gjson.ParseBytes(original)
 	var names []string
-	arr := tools.Array()
-	for i := 0; i < len(arr); i++ {
-		n := arr[i].Get("name").String()
-		if n != "" {
-			names = append(names, n)
+	seen := make(map[string]bool)
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
 		}
 	}
-	if len(names) > 0 {
-		m = buildShortNameMap(names)
+	for _, tool := range root.Get("tools").Array() {
+		add(tool.Get("name").String())
 	}
-	return m
+	for _, message := range root.Get("messages").Array() {
+		for _, part := range message.Get("content").Array() {
+			if part.Get("type").String() == "tool_addition" {
+				add(part.Get("tool.definition.name").String())
+			}
+			if part.Get("type").String() == "tool_use" {
+				add(part.Get("name").String())
+			}
+		}
+	}
+	return buildShortNameMap(names)
 }

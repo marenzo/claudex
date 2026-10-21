@@ -210,10 +210,21 @@ func TestSafeguardCancellationAndCapacity(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("classifier did not cancel")
 	}
-	if strings.Contains(w.Body.String(), "toolu_test") || len(s.classifierSlots) != 0 {
-		t.Fatal("canceled review released tools or leaked capacity")
+	if strings.Contains(w.Body.String(), "toolu_test") {
+		t.Fatal("canceled review released tools")
 	}
-
+	// The handler may return on cancellation before the classifier goroutine's
+	// deferred cleanup runs. Wait for that cleanup rather than racing its defer.
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for len(s.classifierSlots) != 0 {
+		select {
+		case <-deadline:
+			t.Fatal("canceled review leaked capacity")
+		case <-tick.C:
+		}
+	}
 }
 
 func TestParseVerdictsExactCoverage(t *testing.T) {

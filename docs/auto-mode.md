@@ -65,6 +65,9 @@ Limits are four active classifier requests, 32 tool calls per response, 1 MiB of
 review input, 64 MiB of buffered response, 256 KiB of classifier response bytes,
 and a 60-second classifier deadline. Generation no longer reserves a classifier slot. Reviews wait for capacity with
 cancellation; the 60-second deadline includes that wait.
+The review copy excludes opaque thinking signatures and redacted-thinking data;
+visible summaries, user requests, tool results and permission context remain.
+The original generation request and its encrypted replay state are preserved.
 Unsupported context versions, missing fields and explicitly truncated context
 fail with 400. Missing, duplicate, unknown or malformed verdicts, refusal,
 timeout, account changes and interrupted classification fail the response; they
@@ -157,6 +160,9 @@ The reviewer decides safety and authority, not coding style. It must not invent
 read restrictions from write isolation rules or demand proof of hypothetical
 symlinks for routine operations. Explicit read limits, resource limits, hard
 blocks, ask rules, and credential protections still apply.
+Specific user intent and matching `auto_mode.allow` exceptions can clear soft
+denials. Hard denials and explicit ask rules remain in force, matching the
+[documented rule precedence](https://code.claude.com/docs/en/auto-mode-config).
 
 A workflow assignment may describe work without carrying the user's original
 authorization. Claude Code 2.1.306 explicitly labels computed workflow tasks as
