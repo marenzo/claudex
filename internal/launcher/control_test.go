@@ -51,7 +51,7 @@ func TestApplyConfigRestoresOldSettingsWhenNewGatewayIsStale(t *testing.T) {
 	}
 	launchd.loaded = true
 	next := old
-	next.Model = "gpt-5.6-sol"
+	next.Model = "gpt-6.1-sol"
 	next.Dashboard = true
 	if err := ApplyConfig(context.Background(), s, s.Paths.ConfigFile(), old, next); err == nil || !strings.Contains(err.Error(), "different settings") {
 		t.Fatalf("stale gateway accepted: %v", err)
@@ -116,7 +116,7 @@ func TestApplyConfigDoesNotRecreateUninstalledService(t *testing.T) {
 	s, launchd := testService(t)
 	old := writeConfig(t, s, "127.0.0.1:8317", "fixture-key")
 	next := old
-	next.Model = "gpt-5.6-sol"
+	next.Model = "gpt-6.1-sol"
 	if err := ApplyConfig(context.Background(), s, s.Paths.ConfigFile(), old, next); err != nil {
 		t.Fatal(err)
 	}

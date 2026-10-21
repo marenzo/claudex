@@ -91,6 +91,9 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 	sawOutputDelta := false
 	wireBytes := 0
 	write := func(data []byte) bool {
+		if ctx.Err() != nil {
+			return false
+		}
 		if !started {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
@@ -158,7 +161,11 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 					return nil, 499
 				}
 			case result := <-done:
+				if ctx.Err() != nil {
+					return nil, 499
+				}
 				if result.err != nil {
+					record.ErrorKind = classifierErrorKind(result.err)
 					return nil, fail(&apiError{Status: 502, Type: "api_error", Message: "Auto-mode safety review failed; no tool calls were released. Retry or use client-side classification."})
 				}
 				return safeguardResults(result.verdicts), 0
@@ -282,6 +289,12 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 				if !e.Get("response").IsObject() || (e.Get("response.output").Exists() && !e.Get("response.output").IsArray()) {
 					return fail(&apiError{Status: 502, Type: "api_error", Message: "Codex sent malformed terminal response data"})
 				}
+				if status := e.Get("response.status"); status.Exists() && (status.Type != gjson.String || status.String() != strings.TrimPrefix(kind, "response.")) {
+					return fail(&apiError{Status: 502, Type: "api_error", Message: "Codex sent inconsistent terminal response status"})
+				}
+				if err := validateTerminalToolSnapshots(e.Get("response.output"), items, fallback); err != nil {
+					return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
+				}
 				if e.Get("response.error").IsObject() {
 					return fail(parseUpstreamError(200, event.data, time.Now()))
 				}
@@ -304,6 +317,9 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 				}
 				event.data = hydrateOutput(event.data, items, fallback)
 				if !stream {
+					if _, err := state.Convert(append([]byte("data: "), event.data...)); err != nil {
+						return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
+					}
 					result, err := claude.ConvertResponse(model, original, event.data)
 					if err != nil {
 						return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
@@ -327,6 +343,11 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 				}
 			}
 			if !stream {
+				// JSON replies consume the same upstream event stream. Validate its
+				// complete history too; a later snapshot must not erase a changed call.
+				if _, err := state.Convert(append([]byte("data: "), event.data...)); err != nil {
+					return fail(&apiError{Status: 502, Type: "api_error", Message: err.Error()})
+				}
 				continue
 			}
 			// Keep handshake events uncommitted so early quota failures retain HTTP 429.
@@ -359,34 +380,52 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 
 // Codex can send complete items separately and leave response.output empty.
 func hydrateOutput(data []byte, items map[int64][]byte, fallback [][]byte) []byte {
-	indexes := make([]int64, 0, len(items))
-	for index := range items {
+	// Completed output indexes anchor sparse terminal items in their original
+	// positions. Appending terminal-only text after all calls changes its meaning.
+	slots := make(map[int64][]byte, len(items))
+	byID := make(map[string]int64)
+	for index, item := range items {
+		slots[index] = item
+		if id := gjson.GetBytes(item, "id").String(); id != "" {
+			byID[id] = index
+		}
+	}
+	var cursor int64
+	for _, item := range gjson.GetBytes(data, "response.output").Array() {
+		id := item.Get("id").String()
+		if index, exists := byID[id]; id != "" && exists {
+			cursor = index + 1
+			continue
+		}
+		for slots[cursor] != nil {
+			cursor++
+		}
+		slots[cursor] = []byte(item.Raw)
+		if id != "" {
+			byID[id] = cursor
+		}
+		cursor++
+	}
+	indexes := make([]int64, 0, len(slots))
+	for index := range slots {
 		indexes = append(indexes, index)
 	}
 	sort.Slice(indexes, func(i, j int) bool { return indexes[i] < indexes[j] })
-	ordered := make([][]byte, 0, len(items)+len(fallback))
+	ordered := make([][]byte, 0, len(slots)+len(fallback))
 	for _, index := range indexes {
-		ordered = append(ordered, items[index])
+		ordered = append(ordered, slots[index])
 	}
-	ordered = append(ordered, fallback...)
-	// Preserve terminal-only items and use completed item bodies to fill a partial
-	// terminal output. Stable IDs deduplicate the repeated terminal summaries.
-	seen := make(map[string]struct{})
-	for _, item := range ordered {
-		if id := gjson.GetBytes(item, "id").String(); id != "" {
-			seen[id] = struct{}{}
-		}
-	}
-	for _, item := range gjson.GetBytes(data, "response.output").Array() {
-		id := item.Get("id").String()
-		if _, exists := seen[id]; id != "" && exists {
+	for _, item := range fallback {
+		id := gjson.GetBytes(item, "id").String()
+		if _, exists := byID[id]; id != "" && exists {
 			continue
 		}
-		ordered = append(ordered, []byte(item.Raw))
+		ordered = append(ordered, item)
 		if id != "" {
-			seen[id] = struct{}{}
+			byID[id] = -1
 		}
 	}
+
 	if len(ordered) == 0 {
 		return data
 	}
@@ -425,4 +464,41 @@ func inputTokenCount(async func() (int64, error), original []byte) (int64, error
 		return async()
 	}
 	return tokens.CountClaudeInputTokens(original)
+}
+
+// Hydration fills sparse terminal arrays; it must not hide a contradictory call.
+func validateTerminalToolSnapshots(output gjson.Result, items map[int64][]byte, fallback [][]byte) error {
+	byID := make(map[string]gjson.Result)
+	remember := func(raw []byte) {
+		item := gjson.ParseBytes(raw)
+		if id := item.Get("id").String(); id != "" {
+			byID[id] = item
+		}
+	}
+	for _, raw := range items {
+		remember(raw)
+	}
+	for _, raw := range fallback {
+		remember(raw)
+	}
+	seen := make(map[string]bool)
+	for _, item := range output.Array() {
+		if id := item.Get("id").String(); id != "" {
+			if seen[id] {
+				return errors.New("duplicate terminal output ID from Codex")
+			}
+			seen[id] = true
+		}
+		old, ok := byID[item.Get("id").String()]
+		if !ok || (old.Get("type").String() != "function_call" && item.Get("type").String() != "function_call") {
+			continue
+		}
+		for _, field := range []string{"type", "name", "call_id", "arguments"} {
+			value, prior := item.Get(field), old.Get(field)
+			if value.Exists() && prior.Exists() && value.String() != "" && prior.String() != "" && value.String() != prior.String() {
+				return errors.New("inconsistent terminal tool call from Codex")
+			}
+		}
+	}
+	return nil
 }

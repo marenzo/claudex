@@ -22,7 +22,7 @@ unchanged into a native installation.
 | Field | Accepted values |
 | --- | --- |
 | `listen` | A loopback IP literal and a port from 1 to 65535, such as `127.0.0.1:8317` |
-| `model` | `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`, or an alias or Claude family name listed below |
+| `model` | `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna`, `gpt-6-astra`, `gpt-6-sol`, or an alias or Claude family name listed below |
 | `reasoning_effort` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
 | `context_window` | A positive integer |
 | `compact_window` | A positive integer below `context_window` |
@@ -35,9 +35,20 @@ loaded value to the canonical model ID.
 | Name | Model |
 | --- | --- |
 | `astra`, `fable` | `gpt-6-astra` |
-| `terra`, `sonnet` | `gpt-5.6-terra` |
-| `sol`, `opus` | `gpt-5.6-sol` |
-| `luna`, `haiku` | `gpt-5.6-luna` |
+| `sol6`, `sonnet` | `gpt-6-sol` |
+| `sol`, `opus` | `gpt-6.1-sol` |
+| `luna`, `haiku` | `gpt-6-luna` |
+| `terra` | `gpt-5.6-terra` |
+
+The model picker contains only these five models, plus Claude Code's Default row
+(which resolves to the configured model). Claudex replaces Claude Code's built-in
+lineup, so image models, other versions, and duplicate gateway/family rows are
+hidden. This applies only to Claude Code launched through `claudex`; ordinary
+Claude Code settings are unchanged. Restart the Claude Code process to reload the
+launcher settings; a gateway restart alone cannot update an open picker.
+
+Terra remains GPT-5.6 Terra; there is no GPT-6 Terra in the verified catalog.
+GPT-6 Sol is the only older model retained.
 
 A family name also matches `claude-<family>` and `claude-<family>-<version>`, such
 as `claude-opus-4-7`.
@@ -112,9 +123,9 @@ windows change the generated values.
 | `ANTHROPIC_CUSTOM_MODEL_OPTION` | `gpt-6-astra` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` | `GPT-6 Astra (Codex subscription)` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION` | `Local Claudex proxy` |
-| `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `gpt-5.6-luna` |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `gpt-5.6-terra` |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `gpt-5.6-sol` |
+| `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `gpt-6-luna` |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `gpt-6-sol` |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `gpt-6.1-sol` |
 | `ANTHROPIC_DEFAULT_FABLE_MODEL` | `gpt-6-astra` |
 | `ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL_NAME` | Matching GPT name plus ` (Codex subscription)` |
 | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` |

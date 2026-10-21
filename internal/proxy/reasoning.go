@@ -10,8 +10,7 @@ import (
 )
 
 // Keep policy in the gateway: the translator only converts conversation data.
-// Claude's disabled setting wins over an effort sent by the harness. Astra has
-// no documented none level, so use its lowest supported effort for that case.
+// Disabled thinking wins over a harness effort. Models without none use low.
 func resolveReasoningEffort(root gjson.Result, defaultEffort string, model config.Model) (string, error) {
 	if root.Get("thinking.type").String() == "disabled" {
 		if slices.Contains(model.Efforts, "none") {
@@ -29,6 +28,9 @@ func resolveReasoningEffort(root gjson.Result, defaultEffort string, model confi
 				return "", fmt.Errorf("thinking.budget_tokens must be an integer of at least -1")
 			}
 			effort = reasoningEffortForBudget(budget.Int())
+			if budget.Int() == 0 && !slices.Contains(model.Efforts, "none") {
+				effort = "low"
+			}
 		}
 	}
 	if effort == "auto" || effort == "" {
@@ -36,10 +38,9 @@ func resolveReasoningEffort(root gjson.Result, defaultEffort string, model confi
 	}
 	switch effort {
 	case "ultra", "ultracode":
-		// The Codex API has no ultra level. Codex's own Ultra setting sends xhigh and
-		// turns on proactive multi-agent delegation (verified from a captured Codex
-		// CLI request), so ultra maps to the same model effort.
-		effort = "xhigh"
+		// Match the upstream model-owned Ultra normalization. Astra and 6.1 Sol
+		// use xhigh; models without an override fall back to max.
+		effort = model.UltraEffort
 	case "minimal":
 		// None of the supported models exposes minimal; preserve the request's
 		// low-effort intent using the lowest reasoning-enabled level.

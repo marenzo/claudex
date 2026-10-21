@@ -48,7 +48,7 @@ func TestRevisionIgnoresDashboardOverride(t *testing.T) {
 	if cfg.Revision() != withDashboard.Revision() {
 		t.Error("dashboard changed the revision")
 	}
-	cfg.Model = "gpt-5.6-sol"
+	cfg.Model = "gpt-6.1-sol"
 	if cfg.Revision() == withDashboard.Revision() {
 		t.Error("model did not change the revision")
 	}

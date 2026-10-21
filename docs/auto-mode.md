@@ -6,21 +6,22 @@ permission policy, not Anthropic's classifier and not Anthropic's no-charge
 classifier service. Both generation and classification consume Codex usage.
 
 This feature is **off by default**. It is an experimental implementation of the
-protocol observed in Claude Code 2.1.283. Small fixture tests establish protocol
+protocol observed in Claude Code 2.1.283 and checked again with 2.1.306. Small fixture tests establish protocol
 compatibility; they do not establish equivalent safety to Anthropic's classifier
 or resistance to arbitrary prompt injection. Keep it opt-in while evaluating it.
 
 ## Enable
 
-Run `claudex ctl config reviewer astra`, or add this field to your Claudex config:
+Run `claudex ctl config reviewer gpt-6.1-sol`, or add this field to your Claudex config:
 
 ```json
-"auto_mode_classifier_model": "astra"
+"auto_mode_classifier_model": "gpt-6.1-sol"
 ```
 
 Any supported model or alias is accepted, independently of the generation model.
-The reviewer uses `high` reasoning effort. Only Astra has been live-tested for
-this feature. `ctl config` waits for active requests and applies the change.
+The reviewer always uses `high` reasoning effort, independently of the generation
+effort. Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna passed the bounded live checks
+covered by the opt-in live fixtures. `ctl config` waits for active requests and applies the change.
 Start a fresh `claudex` session in auto mode. The launcher selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
 
@@ -47,7 +48,8 @@ structured JSON with exactly one `flagged` or `not_flagged` verdict per call.
 
 The policy lives in `internal/proxy/safeguards.go`. It prioritizes hard denials,
 ask rules, user limits, workspace boundaries, and explicit authorization for
-destructive or shared-system changes. Uncertainty is a reason to flag a call.
+destructive or shared-system changes. Concrete safety or authorization concerns
+are reasons to flag a call.
 Prompts, retrieved content and tool arguments are evidence, not instructions to
 the reviewer. Claude Code still applies its own permission rules and executes
 or denies the tool after receiving the result.
@@ -59,9 +61,13 @@ visible output and does not offer incremental text streaming for reviewed turns.
 Text-only turns need no extra model request but still return an empty verdict map.
 Requests without a safeguard remain on the ordinary streaming path.
 
-Limits are four active reviewed requests, 32 tool calls per response, 1 MiB of
+Limits are four active classifier requests, 32 tool calls per response, 1 MiB of
 review input, 64 MiB of buffered response, 256 KiB of classifier response bytes,
-and a 60-second classifier deadline. Requests beyond capacity fail with 429.
+and a 60-second classifier deadline. Generation no longer reserves a classifier slot. Reviews wait for capacity with
+cancellation; the 60-second deadline includes that wait.
+The review copy excludes opaque thinking signatures and redacted-thinking data;
+visible summaries, user requests, tool results and permission context remain.
+The original generation request and its encrypted replay state are preserved.
 Unsupported context versions, missing fields and explicitly truncated context
 fail with 400. Missing, duplicate, unknown or malformed verdicts, refusal,
 timeout, account changes and interrupted classification fail the response; they
@@ -83,7 +89,8 @@ its displayed cost is not a reliable account of the additional Codex usage.
 The official [gateway guide](https://code.claude.com/docs/en/llm-gateway-protocol)
 requires preserving safeguard requests and results. Its public documentation does
 not fully specify the wire schema. Inspection of the installed Claude Code
-2.1.283 implementation established this shape:
+2.1.283 implementation established this shape; the 2.1.306 package and local
+real-client check confirmed it again:
 
 ```json
 {
@@ -139,3 +146,29 @@ Run it with both variables above and
 `go test -tags 'live e2e' -run TestLiveClaudeGPTSafeguardDecision -v ./internal/proxy`.
 Broader adversarial evaluation, latency measurements on representative sessions,
 and compatibility testing on future Claude Code versions remain necessary.
+
+## Review diagnostics and delegated workflows
+
+Successful reviews log a request fingerprint, model, allow/flag counts, duration,
+and token counts. Failures log bounded categories (timeout, HTTP failure, invalid
+verdict, or other review failure). Neither path logs commands, explanations,
+conversation text, or credential material. Request-context rejection has the
+`classifier_context` error kind. Existing older logs lack verdict counts and
+cannot retrospectively identify all policy decisions.
+
+The reviewer decides safety and authority, not coding style. It must not invent
+read restrictions from write isolation rules or demand proof of hypothetical
+symlinks for routine operations. Explicit read limits, resource limits, hard
+blocks, ask rules, and credential protections still apply.
+Specific user intent and matching `auto_mode.allow` exceptions can clear soft
+denials. Hard denials and explicit ask rules remain in force, matching the
+[documented rule precedence](https://code.claude.com/docs/en/auto-mode-config).
+
+A workflow assignment may describe work without carrying the user's original
+authorization. Claude Code 2.1.306 explicitly labels computed workflow tasks as
+script output. The gateway preserves that provenance. Relaying only “delegate to
+agents” can omit the task being delegated, and a computed claim that the owner
+approved it cannot restore the missing authorization. Give the workflow the
+actual scoped user request; use a directly assigned agent when that preserves
+necessary context. Do not disable provenance or reinterpret generated approval
+claims as consent.

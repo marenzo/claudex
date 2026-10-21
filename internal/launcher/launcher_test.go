@@ -58,7 +58,7 @@ func gateway(t *testing.T, key string) *httptest.Server {
 		case "/healthz":
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "product": "claudex", "version": "test"})
 		case "/v1/models":
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "gpt-6-astra"}, {"id": "gpt-5.6-luna"}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": "gpt-6-astra"}, {"id": "gpt-6-luna"}}})
 		case "/_claudex/status":
 			revision, _ := gatewayRevisions.Load(r.Host)
 			_ = json.NewEncoder(w).Encode(map[string]any{"revision": revision, "dashboard": false})
@@ -121,7 +121,7 @@ func fixtureBinary(t *testing.T) string {
 func TestSettingsNormalizeAliasesAndFamilies(t *testing.T) {
 	cfg := config.DefaultsFor("/fixture")
 	for alias, canonical := range map[string]string{"terra": "gpt-5.6-terra", " GPT-5.6-TERRA ": "gpt-5.6-terra",
-		"claude-sonnet-4-6[1m]": "gpt-5.6-terra", "Opus": "gpt-5.6-sol", "claude-haiku": "gpt-5.6-luna", "FABLE": "gpt-6-astra"} {
+		"claude-sonnet-4-6[1m]": "gpt-6-sol", "Opus": "gpt-6.1-sol", "claude-haiku": "gpt-6-luna", "FABLE": "gpt-6-astra"} {
 		cfg.Model = alias
 		settings, err := Settings(cfg)
 		if err != nil {
@@ -140,12 +140,12 @@ func TestSettingsNormalizeAliasesAndFamilies(t *testing.T) {
 	if settings.EffortLevel != "ultracode" || !reflect.DeepEqual(settings.Permissions.Deny, []string{"Artifact"}) {
 		t.Errorf("unexpected settings %+v", settings)
 	}
-	for family, target := range map[string]string{"HAIKU": "gpt-5.6-luna", "SONNET": "gpt-5.6-terra", "OPUS": "gpt-5.6-sol", "FABLE": "gpt-6-astra"} {
+	for family, target := range map[string]string{"HAIKU": "gpt-6-luna", "SONNET": "gpt-6-sol", "OPUS": "gpt-6.1-sol", "FABLE": "gpt-6-astra"} {
 		if settings.Env["ANTHROPIC_DEFAULT_"+family+"_MODEL"] != target {
 			t.Errorf("%s mapped to %q", family, settings.Env["ANTHROPIC_DEFAULT_"+family+"_MODEL"])
 		}
 	}
-	if settings.Env["ANTHROPIC_SMALL_FAST_MODEL"] != "gpt-5.6-luna" || settings.Env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] != "1000000" {
+	if settings.Env["ANTHROPIC_SMALL_FAST_MODEL"] != "gpt-6-luna" || settings.Env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] != "1000000" {
 		t.Errorf("unexpected env %v", settings.Env)
 	}
 	if _, ok := settings.Env["ANTHROPIC_AUTH_TOKEN"]; ok {
@@ -161,12 +161,41 @@ func TestRewriteArgsPreservesClaudeArguments(t *testing.T) {
 	for _, test := range []struct{ in, want []string }{
 		{[]string{"--model", "terra", "--effort=ultra"}, []string{"--model", "gpt-5.6-terra", "--effort=ultracode"}},
 		{[]string{"--model=opus", "--effort", "max"}, []string{"--model=opus", "--effort", "max"}},
-		{[]string{"--model=SOL", "--effort", "ultra"}, []string{"--model=gpt-5.6-sol", "--effort", "ultracode"}},
+		{[]string{"--model=SOL", "--effort", "ultra"}, []string{"--model=gpt-6.1-sol", "--effort", "ultracode"}},
 		{[]string{"--", "--model=sol", "--effort=ultra"}, []string{"--", "--model=sol", "--effort=ultra"}},
 	} {
 		if got := RewriteArgs(test.in); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("RewriteArgs(%q) = %q, want %q", test.in, got, test.want)
 		}
+	}
+}
+
+func TestPickerReplacesBuiltInsWithOnlyAgreedModels(t *testing.T) {
+	settings, err := Settings(config.DefaultsFor("/fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-astra", "gpt-6-sol"}
+	if !settings.ModelPicker.ReplaceBuiltInOptions || !reflect.DeepEqual(settings.AvailableModels, want) {
+		t.Fatalf("picker does not replace and restrict built-ins: %+v", settings.ModelPicker)
+	}
+	var got []string
+	for _, option := range settings.ModelPicker.Options {
+		got = append(got, option.Model)
+		if option.Label == "" || option.Description == "" {
+			t.Fatal("unlabeled model row")
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("picker model IDs: %v", got)
+	}
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]json.RawMessage
+	if json.Unmarshal(raw, &decoded) != nil || decoded["availableModels"] == nil || decoded["modelPicker"] == nil {
+		t.Fatal("Claude Code picker settings missing from launcher JSON")
 	}
 }
 
@@ -455,7 +484,7 @@ func TestLauncherAppliesLocalAuthAndPreservesArguments(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantPrefix := []string{"/fixture/claude", "--disallowedTools", "Artifact", "--settings"}
-	wantSuffix := []string{"--model", "gpt-5.6-sol", "--print", "fixture prompt"}
+	wantSuffix := []string{"--model", "gpt-6.1-sol", "--print", "fixture prompt"}
 	if gotPath != "/fixture/claude" || len(gotArgs) != 9 || !reflect.DeepEqual(gotArgs[:4], wantPrefix) || !reflect.DeepEqual(gotArgs[5:], wantSuffix) {
 		t.Errorf("argv %v", gotArgs)
 	}

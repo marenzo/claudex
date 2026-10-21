@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	translatorcommon "github.com/marenzo/claudex/internal/translator/common"
 	"github.com/tidwall/gjson"
 )
 
@@ -11,7 +12,16 @@ import (
 // terminal snapshot can finish a partial call but cannot contradict bytes already
 // sent to Claude. Errors deliberately exclude arguments and tool identities.
 func validateFunctionCallEvent(params *streamState, event gjson.Result) error {
-	switch event.Get("type").String() {
+	kind := event.Get("type").String()
+	if kind == "response.output_item.added" || kind == "response.output_item.done" || kind == "response.function_call_arguments.delta" || kind == "response.function_call_arguments.done" {
+		item := event.Get("item")
+		if item.Get("type").String() == "function_call" || strings.HasPrefix(kind, "response.function_call_arguments.") {
+			if err := validateFunctionCallIdentity(params, codexFunctionCallKeys(event, item), item, event.Get("call_id").String()); err != nil {
+				return err
+			}
+		}
+	}
+	switch kind {
 	case "response.function_call_arguments.done":
 		call := codexFunctionCallForEvent(params, event, gjson.Result{})
 		return validateFunctionCallArguments(call, event.Get("arguments"))
@@ -27,7 +37,11 @@ func validateFunctionCallEvent(params *streamState, event gjson.Result) error {
 			if item.Get("type").String() != "function_call" {
 				continue
 			}
-			call := codexFunctionCallForKeys(params, terminalFunctionCallKeys(index, item))
+			keys := terminalFunctionCallKeys(index, item)
+			if err := validateFunctionCallIdentity(params, keys, item, ""); err != nil {
+				return err
+			}
+			call := codexFunctionCallForKeys(params, keys)
 			if item.Get("name").String() == "" && (call == nil || call.Name == "") {
 				return errors.New("incomplete tool call from Codex")
 			}
@@ -65,8 +79,29 @@ func validateFunctionCallArguments(call *codexFunctionCallStream, snapshot gjson
 			return errors.New("inconsistent tool arguments from Codex")
 		}
 	}
-	if !gjson.Valid(arguments) || !gjson.Parse(arguments).IsObject() {
+	if translatorcommon.ValidateUnambiguousJSON([]byte(arguments)) != nil || !gjson.Parse(arguments).IsObject() {
 		return errors.New("incomplete or invalid tool arguments from Codex")
+	}
+	return nil
+}
+
+func validateFunctionCallIdentity(params *streamState, keys []string, item gjson.Result, eventCallID string) error {
+	call := codexFunctionCallForKeys(params, keys)
+	if call == nil {
+		return nil
+	}
+	for _, key := range keys {
+		if other := params.FunctionCalls[key]; other != nil && other != call {
+			return errors.New("conflicting tool call identity from Codex")
+		}
+	}
+	if name := item.Get("name").String(); name != "" && call.Name != "" && name != call.Name {
+		return errors.New("inconsistent tool name from Codex")
+	}
+	for _, id := range []string{item.Get("call_id").String(), eventCallID} {
+		if id != "" && call.CallID != "" && id != call.CallID {
+			return errors.New("inconsistent tool ID from Codex")
+		}
 	}
 	return nil
 }

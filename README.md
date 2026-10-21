@@ -55,9 +55,9 @@ Each Claude model family maps to a GPT model:
 
 | Claude family | GPT model | Alias |
 | --- | --- | --- |
-| Haiku | GPT-5.6 Luna | `luna` |
-| Sonnet | GPT-5.6 Terra | `terra` |
-| Opus | GPT-5.6 Sol | `sol` |
+| Haiku | GPT-6 Luna | `luna` |
+| Sonnet | GPT-6 Sol | `sol6` |
+| Opus | GPT-6.1 Sol | `sol` |
 | Fable | GPT-6 Astra | `astra` |
 
 The default is Astra with `high` effort. Override either per session:

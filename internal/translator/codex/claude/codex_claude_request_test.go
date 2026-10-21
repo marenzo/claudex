@@ -1112,7 +1112,7 @@ func TestConvertClaudeRequestToCodex_StripsUnsupportedUnicodePropertyEscapePatte
 		"model": "gpt-5.6",
 		"messages": [{"role": "user", "content": "hello"}],
 		"tools": [{
-			"name": "Artifact",
+			"name": "RenderFixture",
 			"description": "Render an HTML file to an Artifact",
 			"input_schema": {
 				"type": "object",

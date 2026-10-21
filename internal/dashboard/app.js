@@ -25,15 +25,21 @@ const effortColors = {
 const effortOrder = Object.keys(effortColors);
 const modelOrder = [
   "gpt-6-astra",
+  "gpt-6.1-sol",
+  "gpt-6-sol",
+  "gpt-6-luna",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
   "gpt-5.6-luna",
 ];
 const modelNames = {
   "gpt-6-astra": "Astra",
-  "gpt-5.6-sol": "Sol",
-  "gpt-5.6-terra": "Terra",
-  "gpt-5.6-luna": "Luna",
+  "gpt-6.1-sol": "Sol 6.1",
+  "gpt-6-sol": "Sol 6",
+  "gpt-6-luna": "Luna 6",
+  "gpt-5.6-sol": "Sol 5.6",
+  "gpt-5.6-terra": "Terra 5.6",
+  "gpt-5.6-luna": "Luna 5.6",
 };
 const fullNumber = new Intl.NumberFormat();
 const shortNumber = new Intl.NumberFormat(undefined, {
