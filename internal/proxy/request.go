@@ -24,7 +24,7 @@ func prepareRequest(raw []byte, cfg config.Config) ([]byte, string, error) {
 	}
 	model, ok := config.FindModel(requestedModel)
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported model %q; choose gpt-6-astra, gpt-5.6-terra, gpt-5.6-sol, or gpt-5.6-luna", requestedModel)
+		return nil, "", fmt.Errorf("unsupported model %q; choose gpt-6-astra, gpt-6.1-sol, gpt-6-sol, gpt-6-luna, or an explicitly pinned GPT-5.6 model", requestedModel)
 	}
 	if strings.EqualFold(root.Get("tool_choice.name").String(), "Artifact") {
 		return nil, "", fmt.Errorf("publishing through Artifact is disabled; use local file tools")
@@ -33,6 +33,20 @@ func prepareRequest(raw []byte, cfg config.Config) ([]byte, string, error) {
 	if tools.IsArray() {
 		filtered := make([]json.RawMessage, 0, len(tools.Array()))
 		for _, tool := range tools.Array() {
+			if callers := tool.Get("allowed_callers"); callers.Exists() {
+				if !callers.IsArray() || len(callers.Array()) == 0 {
+					return nil, "", fmt.Errorf("allowed_callers must allow direct tool calls")
+				}
+				for _, caller := range callers.Array() {
+					if caller.Type != gjson.String || caller.String() != "direct" {
+						return nil, "", fmt.Errorf("programmatic allowed_callers are not supported by Claudex")
+					}
+				}
+			}
+			kind := tool.Get("type").String()
+			if kind != "" && kind != "custom" && kind != "function" && !strings.HasPrefix(kind, "web_search_") {
+				return nil, "", fmt.Errorf("Input tag '%s' is not supported; Claudex supports client functions and web search", kind)
+			}
 			if !strings.EqualFold(tool.Get("name").String(), "Artifact") {
 				if tool.Get("name").String() == "WebSearch" {
 					// Claude Code normally runs this client tool through Anthropic. Expose

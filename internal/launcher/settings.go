@@ -20,7 +20,7 @@ type ClaudeSettings struct {
 }
 
 // Families maps Claude model families to the GPT model that serves them.
-var Families = map[string]string{"FABLE": "astra", "OPUS": "sol", "SONNET": "terra", "HAIKU": "luna"}
+var Families = map[string]string{"FABLE": "astra", "OPUS": "sol", "SONNET": "sol6", "HAIKU": "luna"}
 
 const suffix = " (Codex subscription)"
 
@@ -28,7 +28,7 @@ const suffix = " (Codex subscription)"
 func Settings(cfg config.Config) (ClaudeSettings, error) {
 	model, ok := config.FindModel(cfg.Model)
 	if !ok {
-		return ClaudeSettings{}, fmt.Errorf("unsupported model %q: choose astra, terra, sol, luna, or a Claude family", cfg.Model)
+		return ClaudeSettings{}, fmt.Errorf("unsupported model %q: choose a supported GPT model alias or Claude family", cfg.Model)
 	}
 	small, _ := config.FindModel(Families["HAIKU"])
 	env := map[string]string{
@@ -96,7 +96,7 @@ func RewriteArgs(args []string) []string {
 	return out
 }
 
-// canonicalAlias expands direct aliases only (astra, terra, sol, luna). Claude
+// canonicalAlias expands catalog aliases only. Claude
 // family names such as "opus" are passed through so Claude Code resolves them.
 func canonicalAlias(value string) string {
 	for _, model := range config.Models() {

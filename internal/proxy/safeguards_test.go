@@ -44,7 +44,7 @@ func TestSafeguardsStreamAndJSON(t *testing.T) {
 					if calls == 1 {
 						return upstreamResponse(200, toolResponse()), nil
 					}
-					if gjson.GetBytes(body, "model").String() != "gpt-5.6-sol" || len(gjson.GetBytes(body, "tools").Array()) != 0 || gjson.GetBytes(body, "tool_choice").String() != "none" || gjson.GetBytes(body, "instructions").String() != classifierPolicy {
+					if gjson.GetBytes(body, "model").String() != "gpt-6.1-sol" || len(gjson.GetBytes(body, "tools").Array()) != 0 || gjson.GetBytes(body, "tool_choice").String() != "none" || gjson.GetBytes(body, "instructions").String() != classifierPolicy {
 						t.Errorf("classifier isolation: %s", body)
 					}
 					if r.Header.Get("Session_id") != "" {
@@ -213,13 +213,7 @@ func TestSafeguardCancellationAndCapacity(t *testing.T) {
 	if strings.Contains(w.Body.String(), "toolu_test") || len(s.classifierSlots) != 0 {
 		t.Fatal("canceled review released tools or leaked capacity")
 	}
-	for range cap(s.classifierSlots) {
-		s.classifierSlots <- struct{}{}
-	}
-	w = request(s, "/v1/messages", reviewRequest(true))
-	if w.Code != 429 || calls != 2 {
-		t.Fatalf("capacity: %d calls %d", w.Code, calls)
-	}
+
 }
 
 func TestParseVerdictsExactCoverage(t *testing.T) {
@@ -244,5 +238,69 @@ func TestSafeguardRejectsAmbiguousToolArguments(t *testing.T) {
 	}
 	if err := review.addCall(reviewedTool{ID: "test", Name: "Bash", Input: json.RawMessage(`{"command":"safe","command":"different"}`)}); err == nil {
 		t.Fatal("accepted duplicate tool argument keys")
+	}
+}
+
+func TestSafeguardWaitsForReviewCapacityAfterGeneration(t *testing.T) {
+	generation := make(chan struct{})
+	classifier := make(chan struct{})
+	s := fixture(t, func(r *http.Request) (*http.Response, error) {
+		body, _ := io.ReadAll(r.Body)
+		if gjson.GetBytes(body, "text.format.name").String() == "claudex_permission_verdicts" {
+			close(classifier)
+			return upstreamResponse(200, classifierResponse(`{"verdicts":[{"id":"toolu_test","outcome":"not_flagged","explanation":"Fixture"}]}`)), nil
+		}
+		close(generation)
+		return upstreamResponse(200, toolResponse()), nil
+	})
+	s.Config.AutoModeClassifierModel = "astra"
+	for range cap(s.classifierSlots) {
+		s.classifierSlots <- struct{}{}
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- request(s, "/v1/messages", reviewRequest(true)) }()
+	select {
+	case <-generation:
+	case <-time.After(5 * time.Second):
+		t.Fatal("generation held behind review capacity")
+	}
+	select {
+	case <-classifier:
+		t.Fatal("classifier exceeded capacity")
+	default:
+	}
+	<-s.classifierSlots
+	select {
+	case w := <-done:
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "not_flagged") {
+			t.Fatalf("queued review: %d %s", w.Code, w.Body)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("queued review did not resume")
+	}
+	if len(s.classifierSlots) != cap(s.classifierSlots)-1 {
+		t.Fatal("review slot leaked")
+	}
+}
+
+func TestQueuedSafeguardCancellation(t *testing.T) {
+	s := fixture(t, func(*http.Request) (*http.Response, error) {
+		t.Fatal("queued classifier contacted upstream")
+		return nil, nil
+	})
+	s.Config.AutoModeClassifierModel = "astra"
+	for range cap(s.classifierSlots) {
+		s.classifierSlots <- struct{}{}
+	}
+	review, err := newSafeguardReview([]byte(reviewRequest(false)), s.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review.calls = []reviewedTool{{ID: "toolu_test", Name: "Bash", Input: json.RawMessage(`{"command":"printf SAFE_PROBE"}`)}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = s.classifyTools(ctx, review, "fixture")
+	if err != context.Canceled || len(s.classifierSlots) != cap(s.classifierSlots) {
+		t.Fatalf("queued cancellation: %v", err)
 	}
 }

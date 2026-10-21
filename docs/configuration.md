@@ -22,7 +22,7 @@ unchanged into a native installation.
 | Field | Accepted values |
 | --- | --- |
 | `listen` | A loopback IP literal and a port from 1 to 65535, such as `127.0.0.1:8317` |
-| `model` | `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`, or an alias or Claude family name listed below |
+| `model` | `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, or an alias or Claude family name listed below |
 | `reasoning_effort` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
 | `context_window` | A positive integer |
 | `compact_window` | A positive integer below `context_window` |
@@ -35,9 +35,15 @@ loaded value to the canonical model ID.
 | Name | Model |
 | --- | --- |
 | `astra`, `fable` | `gpt-6-astra` |
-| `terra`, `sonnet` | `gpt-5.6-terra` |
-| `sol`, `opus` | `gpt-5.6-sol` |
-| `luna`, `haiku` | `gpt-5.6-luna` |
+| `sol6`, `sonnet` | `gpt-6-sol` |
+| `sol`, `opus` | `gpt-6.1-sol` |
+| `luna`, `haiku` | `gpt-6-luna` |
+| `sol5.6` | `gpt-5.6-sol` |
+| `terra` | `gpt-5.6-terra` |
+| `luna5.6` | `gpt-5.6-luna` |
+
+Pinned GPT-5.6 IDs remain selectable; the family defaults now use the newer models.
+No GPT-6 Terra is listed by upstream Codex; Sonnet moves to GPT-6 Sol.
 
 A family name also matches `claude-<family>` and `claude-<family>-<version>`, such
 as `claude-opus-4-7`.
@@ -112,9 +118,9 @@ windows change the generated values.
 | `ANTHROPIC_CUSTOM_MODEL_OPTION` | `gpt-6-astra` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` | `GPT-6 Astra (Codex subscription)` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION` | `Local Claudex proxy` |
-| `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `gpt-5.6-luna` |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `gpt-5.6-terra` |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `gpt-5.6-sol` |
+| `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `gpt-6-luna` |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `gpt-6-sol` |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `gpt-6.1-sol` |
 | `ANTHROPIC_DEFAULT_FABLE_MODEL` | `gpt-6-astra` |
 | `ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL_NAME` | Matching GPT name plus ` (Codex subscription)` |
 | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` |

@@ -251,17 +251,9 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	review, errReview := newSafeguardReview(raw, s.Config)
 	if errReview != nil {
+		record.ErrorKind = "classifier_context"
 		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errReview.Error()})
 		return
-	}
-	if review != nil {
-		select {
-		case s.classifierSlots <- struct{}{}:
-			defer func() { <-s.classifierSlots }()
-		default:
-			fail(&apiError{Status: 429, Type: "rate_limit_error", Message: "Auto-mode review capacity exhausted; retry later."})
-			return
-		}
 	}
 	body, session, errPrepare := prepareRequest(raw, s.Config)
 	if errPrepare != nil {

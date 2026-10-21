@@ -77,10 +77,10 @@ Claudex picks one GPT effort per request. It applies these rules in order:
 
 | Claude request | Effort sent to GPT |
 | --- | --- |
-| `thinking.type: disabled` | `none`. Astra has no `none`, so it gets `low`. |
+| `thinking.type: disabled` | `none` where supported; Astra and GPT-6.1 Sol get `low`. |
 | Explicit `output_config.effort` | That effort, after the rewrites below |
 | `thinking.type: enabled` with `budget_tokens: -1` | Configured default |
-| `budget_tokens: 0` | `none` |
+| `budget_tokens: 0` | `none` where supported, otherwise `low` |
 | `budget_tokens` up to 1024 | `low` |
 | `budget_tokens` up to 8192 | `medium` |
 | `budget_tokens` up to 24576 | `high` |
@@ -92,7 +92,7 @@ Claudex then rewrites a few values:
 | Effort | Becomes |
 | --- | --- |
 | `auto` or empty | Configured default |
-| `ultra`, `ultracode` | `xhigh` |
+| `ultra`, `ultracode` | `xhigh` for Astra/6.1 Sol; `max` for the other catalog models |
 | `minimal` | `low` |
 | `max` | `max` |
 
@@ -101,12 +101,11 @@ that is not an integer of at least -1 also returns an error. The Codex API accep
 only `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. It rejects
 `ultra`.
 
-Codex's own Ultra setting is a client mode, not an API level. A captured Codex CLI
-request at Ultra carries `xhigh` and turns on proactive multi-agent delegation. Max
-carries `max`. Under Claudex, Claude Code's ultracode workflow supplies the
+Codex's own Ultra setting is a client mode, not an API level. Upstream Codex 430a167 resolves it using each model's
+`multi_agent_reasoning_effort`, falling back to `max`. Max carries `max`. Under Claudex, Claude Code's ultracode workflow supplies the
 delegation. The gateway does not implement Codex's multi-agent harness.
 
-Astra's `low` fallback for disabled thinking cannot promise zero reasoning.
+Astra/6.1 Sol's `low` fallback for disabled thinking cannot promise zero reasoning.
 `thinking.display: omitted` hides visible summaries but keeps encrypted reasoning
 for replay. Disabled thinking also hides visible summaries.
 

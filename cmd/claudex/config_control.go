@@ -99,7 +99,7 @@ func changedPreference(cfg config.Config, key, value string) (config.Config, err
 	case "model":
 		model, ok := config.FindModel(value)
 		if !ok {
-			return cfg, usageError{"model must be astra, terra, sol, or luna"}
+			return cfg, usageError{"model must be astra, sol, sol6, luna, terra, sol5.6, or luna5.6"}
 		}
 		cfg.Model = model.ID
 	case "effort":
@@ -110,7 +110,7 @@ func changedPreference(cfg config.Config, key, value string) (config.Config, err
 		} else {
 			model, ok := config.FindModel(value)
 			if !ok {
-				return cfg, usageError{"reviewer must be client, astra, terra, sol, or luna"}
+				return cfg, usageError{"reviewer must be client, astra, sol, sol6, luna, terra, sol5.6, or luna5.6"}
 			}
 			cfg.AutoModeClassifierModel = model.ID
 		}

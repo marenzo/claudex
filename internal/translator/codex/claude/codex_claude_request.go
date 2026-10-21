@@ -301,7 +301,7 @@ func ConvertRequest(modelName string, inputRawJSON []byte) []byte {
 				}
 			}
 			tool, _ = sjson.SetRawBytes(tool, "parameters", []byte(normalizeToolParameters(toolResult.Get("input_schema").Raw)))
-			for _, path := range []string{"input_schema", "parameters.$schema", "cache_control", "defer_loading"} {
+			for _, path := range []string{"input_schema", "parameters.$schema", "cache_control", "defer_loading", "eager_input_streaming", "allowed_callers", "input_examples"} {
 				if gjson.GetBytes(tool, path).Exists() {
 					tool, _ = sjson.DeleteBytes(tool, path)
 				}

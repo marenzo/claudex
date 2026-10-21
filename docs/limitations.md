@@ -15,11 +15,11 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   account and upstream behavior. Claudex uses one account, with no API-key mode or
   account failover.
 - **Claude Code remains the harness.** Its UI, orchestration, automatic compaction,
-  tools, and feature gates behave as in Claude Code. Ultra sends `xhigh`, as
-  Codex's own Ultra does. Claude Code's ultracode workflow provides the delegation.
+  tools, and feature gates behave as in Claude Code. Ultra sends the model-specific effort (`xhigh` for Astra and
+  6.1 Sol, otherwise `max`), matching current Codex normalization. Claude Code's ultracode workflow provides the delegation.
   Max stays `max`. See [reasoning and tools](architecture.md#reasoning-and-tools).
 - **Reasoning controls differ.** Disabled thinking sends `none` where the model
-  supports it. Astra gets its minimum, `low`, which does not mean zero reasoning.
+  supports it. Astra and GPT-6.1 Sol get their minimum, `low`, which does not mean zero reasoning.
   Hidden summaries still keep encrypted continuity. An explicit effort the model
   does not support fails with an error.
 - **Some generation controls are not forwarded.** `max_tokens`, `temperature`,
@@ -30,7 +30,14 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   a Claude Code tool. Search-grounded text and Markdown citation links are kept.
   Raw search call and result blocks are dropped so sessions stay valid when resumed
   with Claude. Citations can repeat. Artifact publishing is disabled, but ordinary
-  file generation works.
+  file generation works. Anthropic server tools such as Advisor, server WebFetch,
+  and server tool search return explicit unsupported-tool errors. Advisor errors
+  use Claude Code's documented retry shape. Programmatic-only tools cannot be
+  converted into directly callable functions.
+- **Provider state is only partly portable.** Codex assistant message phases and
+  provider-owned compaction/thread state have no equivalent round trip through
+  ordinary Claude transcript blocks. Exact phase replay is not implemented.
+  Do not assume identical continuation behavior to the native Codex harness.
 - **Context estimates are approximate.** Local counts use O200k for text and tools
   and exclude image and PDF bytes. The default 1,000,000 context window and 900,000
   compaction window are client settings. They do not prove server capacity.

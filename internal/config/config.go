@@ -77,7 +77,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("auth_file and client_key_file must be absolute paths")
 	}
 	if _, ok := FindModel(c.Model); !ok {
-		return fmt.Errorf("model must be gpt-6-astra, gpt-5.6-terra, gpt-5.6-sol, or gpt-5.6-luna")
+		return fmt.Errorf("model must be gpt-6-astra, gpt-6.1-sol, gpt-6-sol, gpt-6-luna, or an explicitly pinned GPT-5.6 model")
 	}
 	if c.AutoModeClassifierModel != "" {
 		if _, ok := FindModel(c.AutoModeClassifierModel); !ok {

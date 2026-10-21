@@ -159,6 +159,7 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 				}
 			case result := <-done:
 				if result.err != nil {
+					record.ErrorKind = classifierErrorKind(result.err)
 					return nil, fail(&apiError{Status: 502, Type: "api_error", Message: "Auto-mode safety review failed; no tool calls were released. Retry or use client-side classification."})
 				}
 				return safeguardResults(result.verdicts), 0
