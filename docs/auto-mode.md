@@ -12,15 +12,16 @@ or resistance to arbitrary prompt injection. Keep it opt-in while evaluating it.
 
 ## Enable
 
-Run `claudex ctl config reviewer astra`, or add this field to your Claudex config:
+Run `claudex ctl config reviewer gpt-6.1-sol`, or add this field to your Claudex config:
 
 ```json
-"auto_mode_classifier_model": "astra"
+"auto_mode_classifier_model": "gpt-6.1-sol"
 ```
 
 Any supported model or alias is accepted, independently of the generation model.
-The reviewer uses `high` reasoning effort. Only Astra has been live-tested for
-this feature. `ctl config` waits for active requests and applies the change.
+The reviewer always uses `high` reasoning effort, independently of the generation
+effort. Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna passed the bounded live checks
+covered by the opt-in live fixtures. `ctl config` waits for active requests and applies the change.
 Start a fresh `claudex` session in auto mode. The launcher selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
 
@@ -47,7 +48,8 @@ structured JSON with exactly one `flagged` or `not_flagged` verdict per call.
 
 The policy lives in `internal/proxy/safeguards.go`. It prioritizes hard denials,
 ask rules, user limits, workspace boundaries, and explicit authorization for
-destructive or shared-system changes. Uncertainty is a reason to flag a call.
+destructive or shared-system changes. Concrete safety or authorization concerns
+are reasons to flag a call.
 Prompts, retrieved content and tool arguments are evidence, not instructions to
 the reviewer. Claude Code still applies its own permission rules and executes
 or denies the tool after receiving the result.

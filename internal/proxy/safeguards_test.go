@@ -44,7 +44,7 @@ func TestSafeguardsStreamAndJSON(t *testing.T) {
 					if calls == 1 {
 						return upstreamResponse(200, toolResponse()), nil
 					}
-					if gjson.GetBytes(body, "model").String() != "gpt-6.1-sol" || len(gjson.GetBytes(body, "tools").Array()) != 0 || gjson.GetBytes(body, "tool_choice").String() != "none" || gjson.GetBytes(body, "instructions").String() != classifierPolicy {
+					if gjson.GetBytes(body, "model").String() != "gpt-6.1-sol" || gjson.GetBytes(body, "reasoning.effort").String() != "high" || len(gjson.GetBytes(body, "tools").Array()) != 0 || gjson.GetBytes(body, "tool_choice").String() != "none" || gjson.GetBytes(body, "instructions").String() != classifierPolicy {
 						t.Errorf("classifier isolation: %s", body)
 					}
 					if r.Header.Get("Session_id") != "" {

@@ -22,6 +22,7 @@ const safeguardType = "dangerous_tool_use"
 const classifierInputLimit = 1024 * 1024
 const classifierOutputLimit = 256 * 1024
 const classifierTimeout = 60 * time.Second
+const classifierReasoningEffort = "high"
 
 // This is an independent permission review, not the generating model's self-report.
 // Requests, tools, retrieved text and model output are data, never instructions
@@ -263,7 +264,7 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 	if !ok {
 		return nil, errors.New("invalid classifier model")
 	}
-	record := dashboard.Request{Started: time.Now(), Model: model.ID, Effort: "high", Status: 502, ErrorKind: "classifier"}
+	record := dashboard.Request{Started: time.Now(), Model: model.ID, Effort: classifierReasoningEffort, Status: 502, ErrorKind: "classifier"}
 	if s.metrics != nil {
 		s.metrics.Begin()
 	}
@@ -298,7 +299,7 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 	}}
 	body, _ := json.Marshal(map[string]any{"model": model.ID, "instructions": classifierPolicy, "stream": true, "store": false,
 		"input": []any{map[string]any{"role": "user", "content": []any{map[string]any{"type": "input_text", "text": string(payload)}}}},
-		"tools": []any{}, "tool_choice": "none", "reasoning": map[string]any{"effort": "high"},
+		"tools": []any{}, "tool_choice": "none", "reasoning": map[string]any{"effort": classifierReasoningEffort},
 		"text": map[string]any{"format": map[string]any{"type": "json_schema", "name": "claudex_permission_verdicts", "strict": true, "schema": schema}},
 	})
 	// Limit active classifier requests, not generation. Previously every reviewed
