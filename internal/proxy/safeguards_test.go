@@ -58,7 +58,7 @@ func TestSafeguardsStreamAndJSON(t *testing.T) {
 					return upstreamResponse(200, classifierResponse(`{"verdicts":[{"id":"toolu_test","outcome":"`+outcome+`","explanation":"Fixture review"}]}`)), nil
 				})
 				s.Config.AutoModeClassifierModel = "sol"
-				s.EnableDashboard()
+
 				w := request(s, "/v1/messages", reviewRequest(stream))
 				if w.Code != 200 || calls != 2 {
 					t.Fatalf("status %d calls %d body %s", w.Code, calls, w.Body)

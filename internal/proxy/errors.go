@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 	"github.com/tidwall/gjson"
 )
 
@@ -15,7 +15,7 @@ type apiError struct {
 	Type       string
 	Message    string
 	QuotaUntil time.Time
-	Details    *dashboard.ErrorDetails
+	Details    *metrics.ErrorDetails
 }
 
 func (e *apiError) body() []byte {
@@ -49,7 +49,7 @@ func parseUpstreamError(status int, data []byte, now time.Time) *apiError {
 		message = message[:4096]
 	}
 	e := &apiError{Status: status, Type: "api_error", Message: message,
-		Details: &dashboard.ErrorDetails{Source: "upstream", Type: kind, Code: code, Message: detailMessage, Status: upstreamStatus}}
+		Details: &metrics.ErrorDetails{Source: "upstream", Type: kind, Code: code, Message: detailMessage, Status: upstreamStatus}}
 	if kind == "usage_limit_reached" || code == "usage_limit_reached" {
 		e.Status, e.Type = 429, "rate_limit_error"
 		e.QuotaUntil = now.Add(time.Minute)

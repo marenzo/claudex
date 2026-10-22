@@ -9,13 +9,43 @@ unchanged into a native installation.
 | --- | --- | --- |
 | `listen` | `127.0.0.1:8317` | Loopback HTTP listener |
 | `auth_file` | None. Required absolute path. Setup writes `<config directory>/auth/codex.json`. | Codex sign-in file, refreshed atomically |
-| `client_key_file` | None. Required absolute path. Setup writes `<config directory>/client-key`. | Client key for Claude Code and the dashboard |
+| `client_key_file` | None. Required absolute path. Setup writes `<config directory>/client-key`. | Client key for inference and gateway control |
 | `model` | `gpt-6-astra` | Model used when the request does not select one |
 | `reasoning_effort` | `high` | Default reasoning effort |
 | `context_window` | `1000000` | Context window advertised to Claude Code |
 | `compact_window` | `900000` | Claude Code's automatic compaction window |
 | `auto_mode_classifier_model` | Empty (disabled) | Experimental separate GPT permission reviewer; see [auto mode](auto-mode.md) |
-| `dashboard` | `false` | Serve the optional authenticated usage dashboard |
+
+## Private files
+
+A fresh native setup uses this layout:
+
+```text
+~/.config/claudex/
+  config.json                      Gateway configuration
+  client-key                       Local gateway access secret
+  auth/codex.json                   Codex subscription sign-in
+  config.json.runtime/gateway.log   Rotating gateway log
+```
+
+The client key is a random secret used by Claude Code and the TUI for inference
+and gateway control. It is separate from the Codex OAuth credentials. The gateway
+reads `auth/codex.json` to authenticate upstream and refreshes that file atomically.
+The TUI shows credential file locations, never their contents.
+
+Setup creates private directories and files, with permissions `0700` and `0600`
+respectively. It preserves an existing configuration and its configured paths;
+running setup again does not relocate credentials. A custom `--config` directory
+gets its own `client-key` and `auth/codex.json` on first setup.
+
+To relocate existing files, stop the gateway first, move the existing client key
+and Codex sign-in without regenerating either, update `client_key_file` and
+`auth_file` to absolute paths, and restart using the same configuration. Coordinate
+with any other process sharing the sign-in file and move its `.lock` sidecar while
+all users of that path are stopped. Keep the client key unchanged so existing
+clients can reconnect. This is a local file move, not a new sign-in or an automatic
+migration performed by Claudex. The two paths shown by the running TUI must match
+the new locations after restart.
 
 ## Valid values
 
@@ -27,7 +57,6 @@ unchanged into a native installation.
 | `context_window` | A positive integer |
 | `compact_window` | A positive integer below `context_window` |
 | `auto_mode_classifier_model` | Empty, or any supported model/alias |
-| `dashboard` | `true` or `false` |
 
 Model names are case-insensitive and may end in `[1m]`. Claudex rewrites the
 loaded value to the canonical model ID.
@@ -58,13 +87,24 @@ bind another address, such as `0.0.0.0:8317` inside a container.
 
 ## Applying changes
 
-Use `claudex ctl config` for guided model, effort, reviewer, and dashboard changes.
-For scripts, use `claudex ctl config model astra` or `claudex ctl config reviewer client`.
-`claudex ctl config edit` opens the full config in your editor. Changes are validated,
-saved, and applied to the managed macOS gateway after active requests finish.
-Start a new Claude Code session to load changed startup settings. If you edit the
-JSON file yourself, run `claudex ctl restart`; foreground gateways need a manual
-restart.
+Open `claudex ctl config` or the TUI Settings view. Model, effort, reviewer,
+context, and compaction changes validate, save atomically, and apply live. Each
+in-flight request retains its original settings, including its classifier model.
+New Claude processes load changed startup defaults; an existing process may keep
+sending its explicitly selected model, effort, and context settings.
+
+Concurrent edits are rejected rather than overwritten. Discard a draft to load
+new settings. If the config changed outside the gateway, restart it to load the
+file before saving through the TUI. A failed write leaves running settings unchanged.
+
+`listen`, `auth_file`, and `client_key_file` are read-only in the TUI. Stop the
+gateway before editing these startup fields. The parser rejects unknown fields.
+There is no web dashboard switch or service configuration in the schema.
+
+Set `CLAUDEX_CONFIG` to select a non-default config for the Claude launcher.
+Control commands accept `--config`; TUI and status also accept `--url` together
+with `--key-file` to connect without local setup. Never pass a client key as an
+argument or use a Codex OAuth token as the client key.
 
 ## Compaction window
 
@@ -74,41 +114,31 @@ Claude Code compaction setting. For example, the 900,000 default replaces a user
 setting of 800,000. A lower window makes each compaction request process less
 history. Neither window changes the model's server-side limits.
 
-## Commands
+## Commands and flags
 
 | Command | Behavior |
 | --- | --- |
-| `claudex [Claude args]` | Launch Claude Code through the gateway; `--resume`, `-p`, and native commands pass through |
-| `claudex ctl [--verbose\|--json]` | Check config, sign-in, gateway, and service without changing them |
-| `claudex ctl setup` | Initialize, sign in, and install the macOS service; run from a newer binary to reinstall |
-| `claudex ctl setup --login` | Refresh Codex sign-in even if current credentials are valid |
-| `claudex ctl config [KEY [VALUE]]` | View, guide, or set model, effort, reviewer, and dashboard |
-| `claudex ctl config edit` | Edit and validate advanced JSON settings |
-| `claudex ctl logs [--follow]` | Show the gateway service log |
-| `claudex ctl start\|stop\|restart` | Manage the macOS service |
-| `claudex ctl run [flags]` | Run the gateway in the foreground |
-| `claudex ctl uninstall` | Remove the service and command, retaining config and credentials |
-| `claudex ctl --version` | Print Claudex build version; root `--version` belongs to Claude |
+| `claudex [Claude arguments]` | Launch Claude through an automatic or existing gateway |
+| `claudex ctl` | Open the TUI; requires a terminal |
+| `claudex ctl config` | Open TUI settings |
+| `claudex ctl status [--json]` | Query authenticated running state |
+| `claudex ctl setup` | Create config/client key and sign in, without installing anything |
+| `claudex ctl setup --login` | Sign in again using the credential store's file lock |
+| `claudex ctl setup --no-browser` | Print the sign-in URL without opening a browser |
+| `claudex ctl setup --no-login` | Initialize without signing in |
+| `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
+| `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
+| `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
 
-## Flags
+Use `--config PATH` on setup, run, logs, status, or the TUI. TUI and status accept
+`--url URL --key-file PATH` instead. `ctl run --listen` is the only way to bind a
+non-loopback address. It logs a warning because the HTTP listener has no TLS.
+Run `claudex ctl --help` or a command's `--help` for its complete syntax.
 
-Run `claudex ctl --help` for the compact command list, or `claudex ctl <command> --help` for its flags.
+Usage mistakes exit with status 2; startup failures exit with status 1. Once
+Claude is running, Claudex propagates its exit status.
 
-| Flag | Command | Behavior |
-| --- | --- | --- |
-| `--config PATH` | ctl, ctl config, ctl setup, ctl run | Use another config file |
-| `--no-browser` | ctl setup | Print the sign-in URL without opening it |
-| `--no-login` | ctl setup | Initialize without signing in |
-| `--login` | ctl setup | Sign in again |
-| `--dashboard` | ctl run | Override the saved dashboard choice for this foreground run |
-| `--listen ADDRESS` | ctl run | Override the listener. This is the only way to bind a non-loopback address. The gateway then logs a warning, because the client key travels over plaintext HTTP. |
-| `--no-start` | ctl setup | Install without starting the service |
-
-Command-line and startup errors print one plain-text line, `claudex: <message>`, to
-standard error. Usage mistakes exit with status 2. Other startup errors exit with
-status 1. Once the gateway is serving, it writes JSON log lines.
-
-## macOS launcher overrides
+## Launcher overrides
 
 `claudex` inherits unrelated environment variables and applies the values
 below. The table shows defaults. Your configured model, effort, listener, and
@@ -146,8 +176,8 @@ Claude settings derived at launch contain the configured `model`, `effortLevel`,
 `--disallowedTools Artifact --settings <JSON>`. Explicit Claude CLI
 options still work.
 
-## Dashboard data
+## Monitoring data
 
 The dashboard uses the same client key as Claude Code. It keeps history in memory
-and clears it on restart. See [the dashboard notes](dashboard.md) for what it
+and clears it on restart. See [the TUI guide](tui.md) for what it
 measures and retains.

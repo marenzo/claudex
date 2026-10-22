@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 )
 
 func TestDashboardCapturesServerErrors(t *testing.T) {
@@ -22,7 +22,7 @@ func TestDashboardCapturesServerErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := fixture(t, func(*http.Request) (*http.Response, error) { return upstreamResponse(tc.upstream, tc.events), nil })
-			s.EnableDashboard()
+
 			request(s, "/v1/messages", `{"messages":[],"stream":true}`)
 			r := s.metrics.Snapshot().Recent[0]
 			if r.Status != tc.status || r.Error == nil || r.Error.Source != "upstream" || r.Error.Status != tc.upstream || r.Error.Message != tc.message || r.Error.Code != tc.code {
@@ -38,7 +38,7 @@ func TestDashboardCapturesServerErrors(t *testing.T) {
 		t.Fatal("invalid request reached upstream")
 		return nil, nil
 	})
-	s.EnableDashboard()
+
 	request(s, "/v1/messages", `null`)
 	r := s.metrics.Snapshot().Recent[0]
 	if r.Status != 400 || r.Error == nil || r.Error.Source != "proxy" || r.Error.Message == "" {
@@ -49,7 +49,7 @@ func TestDashboardCapturesServerErrors(t *testing.T) {
 func TestErrorDetailsRedactCredentialsAndBoundText(t *testing.T) {
 	message := "Reader failed: Bearer opaque-secret; access_token=other-secret& account_id=acct-private " +
 		"test@example.com sk-abcdefghijklmnop eyJheader.payload.signature EXACT_KEY\n" + strings.Repeat("語", 2000)
-	detail := &dashboard.ErrorDetails{Source: "transport", Type: "EXACT_KEY", Message: message}
+	detail := &metrics.ErrorDetails{Source: "transport", Type: "EXACT_KEY", Message: message}
 	got := redactErrorDetails(detail, []string{"EXACT_KEY"})
 	if got == detail || !got.Truncated || len(got.Message) > errorMessageLimit || !utf8.ValidString(got.Message) || !strings.Contains(got.Message, "Reader failed:") || !strings.Contains(got.Message, "\n") {
 		t.Fatal("message lost useful context, exceeded its bound, or reused input")
@@ -68,7 +68,7 @@ func TestDashboardRedactsKnownAccountAndClientCredentials(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{"error": map[string]string{"message": message}})
 		return upstreamResponse(500, string(body)), nil
 	})
-	s.EnableDashboard()
+
 	request(s, "/v1/messages", `{"messages":[]}`)
 	message := s.metrics.Snapshot().Recent[0].Error.Message
 	if !strings.Contains(message, "Failure for") || strings.Contains(message, "test-account") || strings.Contains(message, "fixture") || strings.Contains(message, strings.Repeat("k", 32)) {

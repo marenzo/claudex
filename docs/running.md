@@ -2,68 +2,94 @@
 
 ## Portable binary
 
-Linux and macOS run the Go gateway directly. Download the archive for your
-platform from the [GitHub releases](https://github.com/marenzo/claudex/releases)
-and unpack it. You can also build from source with
-`make build`, which writes `dist/claudex`. The single `claudex` binary is all you
-need at runtime. Both options place it at `dist/claudex`; use that path until
-you have installed the command on PATH.
+Download and unpack a platform archive, or build with `make build`. Both put the
+single binary at `dist/claudex`. Linux and macOS use the same launcher:
 
 ```sh
-./dist/claudex ctl setup
-./dist/claudex ctl run           # foreground; Ctrl-C stops it
+./dist/claudex                   # prepare sign-in if needed; start Claude
+./dist/claudex --resume
+./dist/claudex ctl               # dashboard, in another terminal
 ```
 
-`ctl setup` creates a private config and a random client key and signs in. It never
-overwrites an existing sign-in. The default config is
-`~/.config/claudex/config.json`. For another location, pass
-`--config /absolute/path/config.json` to `ctl setup`, `ctl run`, and `ctl`.
-`ctl setup --no-browser` prints the sign-in URL for you to open. The browser callback
-must reach `127.0.0.1:1455` on the machine running Claudex.
+No installation is necessary. To use `claudex` without the relative path, copy the
+binary into a directory on PATH. `make install` builds and copies it into
+`$(PREFIX)/bin`, with `PREFIX=$HOME/.local` by default. It does not edit shell files,
+sign in, register a service, or run the gateway.
 
-On macOS, `claudex ctl setup` and `claudex` apply launcher settings. With a
-foreground gateway on Linux, set this environment in a second terminal and run the
-installed Claude CLI:
+`ctl setup` creates a private config, a random client key, and a Codex sign-in. It
+keeps an existing configuration and sign-in. Use `--login` to sign in again,
+`--no-browser` to print the URL, or `--no-login` to prepare configuration only.
+The browser callback must reach `127.0.0.1:1455` on the machine running Claudex.
+
+The default config is `~/.config/claudex/config.json`. Set `CLAUDEX_CONFIG` to use
+another configuration when launching Claude. Control commands also accept
+`--config /absolute/path/config.json`.
+
+Fresh setup puts the client key at `~/.config/claudex/client-key` and the Codex
+sign-in at `~/.config/claudex/auth/codex.json`. Existing setups keep their configured
+locations. See [private files](configuration.md#private-files) before moving them.
+
+## Gateway lifetime
+
+`claudex` reuses a compatible authenticated gateway at the configured address. If
+none is listening, it starts a temporary worker from the same binary. Concurrent
+launchers serialize startup. A different program or a gateway rejecting the key
+produces an error rather than being replaced.
+
+Each launched Claude process and open TUI holds an authenticated connection. Closing
+one terminal leaves other clients working; crashes release the connection too.
+After five seconds without clients or active requests, an automatic gateway exits.
+An open TUI keeps it alive, even when live polling is paused.
+
+For a persistent foreground gateway:
 
 ```sh
-export ANTHROPIC_BASE_URL=http://127.0.0.1:8317
-export ANTHROPIC_AUTH_TOKEN="$(cat "$HOME/.config/claudex/client-key")"
-export ANTHROPIC_API_KEY=
-export ANTHROPIC_MODEL=gpt-6-astra
-export ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-6-luna
-export ANTHROPIC_DEFAULT_SONNET_MODEL=gpt-6-sol
-export ANTHROPIC_DEFAULT_OPUS_MODEL=gpt-6.1-sol
-export ANTHROPIC_DEFAULT_FABLE_MODEL=gpt-6-astra
-export ANTHROPIC_SMALL_FAST_MODEL=gpt-6-luna
-export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
-export CLAUDE_CODE_AUTO_COMPACT_WINDOW=900000
-export API_TIMEOUT_MS=600000
-unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS
-unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
-unset CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_MANTLE
-claude --model gpt-6-astra --effort high --disallowedTools Artifact
+claudex ctl setup
+claudex ctl run                  # Ctrl-C initiates graceful shutdown
 ```
 
-If your config points to a client key elsewhere, use its `client_key_file` path in
-the command above. These variables cover routing, context, and authentication. The
-macOS launcher also adds friendly model names and derives Claude settings from the current config.
-See [the launcher overrides](configuration.md#macos-launcher-overrides). Never use a
-Codex access token as the client key.
+Launch Claude normally in another terminal. Closing Claude or the TUI does not
+stop a foreground gateway. Startup errors are plain text; serving logs are JSON.
+Every mode also writes a private rotating log beside the config, under
+`config.json.runtime/gateway.log`: 2 MiB plus three rotated files.
+
+```sh
+claudex ctl status
+claudex ctl status --json
+claudex ctl logs --follow
+```
+
+## Homebrew
+
+The repository is also a Homebrew tap using an explicit remote URL. Its HEAD-only
+formula builds current `main`, with Go required only at build time:
+
+```sh
+brew tap marenzo/claudex https://github.com/marenzo/claudex
+brew install --HEAD marenzo/claudex/claudex
+claudex ctl setup
+brew services start marenzo/claudex/claudex
+```
+
+Service management belongs to Homebrew. Installation never enables the service.
+Use `brew services stop` or `brew services restart` with the same formula name.
+Run services as your user, so they find your private config and Codex credential.
+Set up and sign in interactively before starting a background service.
+
+To update the HEAD build, use `brew upgrade --fetch-HEAD marenzo/claudex/claudex`.
+Restart a running Homebrew service after upgrading its binary.
 
 ## Docker
 
-The image contains only the gateway. Claude Code runs on the host. Build the image
-from a source checkout with `make docker`, because binary archives do not include
-the Go source. Docker must be running and port 8317 must be free, so stop any host
-Claudex service first. This setup keeps Docker credentials separate from a native
-installation.
+The image contains the gateway and TUI binary; Claude Code runs on the host.
+Build it from a source checkout with `make docker`. The image runs as a non-root
+user, exposes port 8317, and includes a `/healthz` health check.
 
-The sign-in callback listener binds to loopback, so sign in on the host with the
-native binary first:
+Sign in on the host because the callback listener binds to loopback. Prepare a
+separate directory for Docker, retaining private permissions:
 
 ```sh
-make docker                                    # builds claudex:local
+make docker
 ./dist/claudex ctl setup --config "$HOME/.config/claudex-docker/host.json"
 cp examples/config.json "$HOME/.config/claudex-docker/config.json"
 chmod 600 "$HOME/.config/claudex-docker/config.json"
@@ -74,99 +100,40 @@ docker run --rm --name claudex \
   claudex:local
 ```
 
-Then use the Claude environment from [the portable binary section](#portable-binary),
-reading the client key from `~/.config/claudex-docker/client-key`. To enable the
-dashboard, append these arguments after `claudex:local`:
+The default container command is `claudex ctl run --config /data/config.json
+--listen 0.0.0.0:8317`. The host port is published only on loopback. Mount a writable
+**directory**, because credential refresh and settings saves replace files
+atomically. A single-file mount cannot support those replacements.
+
+From the host, launch Claude against the container and open the TUI:
 
 ```sh
--config /data/config.json -listen 0.0.0.0:8317 -dashboard
+CLAUDEX_CONFIG="$HOME/.config/claudex-docker/host.json" ./dist/claudex
+./dist/claudex ctl --url http://127.0.0.1:8317 \
+  --key-file "$HOME/.config/claudex-docker/client-key"
 ```
 
-Mount a writable **directory**, not a single file. Refreshing the Codex sign-in
-replaces `auth/codex.json` atomically, which fails on a file mount. The host UID and
-GID let the non-root process write its mounted credential files. The config and key
-are private, so keep the directory private too.
+The launcher reads active preferences from the authenticated gateway; host and
+container config paths do not need to match. The TUI needs only the gateway URL
+and client key, not a local Codex credential. Keep the HTTP listener on trusted
+interfaces; use an SSH tunnel or HTTPS reverse proxy for remote access.
 
-The example publishes the host port on loopback only. Inside the container,
-`-listen 0.0.0.0:8317` is required for Docker's port forwarding, so the startup
-warning about a non-loopback address is expected. Config files can only bind
-loopback. Do not expose this plaintext HTTP port to an untrusted network. API
-requests still require the client key.
+## Updating and uninstalling
 
-The image has a Docker `HEALTHCHECK` that probes `/healthz`, so `docker ps` shows
-the container's health.
+For portable binaries, close attached sessions, stop any foreground gateway, and
+replace the binary. An automatic gateway exits when its clients disconnect. For
+Homebrew, use its upgrade and service commands. Runtime components must use this
+control protocol; unsupported older gateways are rejected.
 
-To sign in again, stop the container, repeat the host `ctl setup --login` command, and start
-the container again. Only one gateway should own a credential store at a time.
-
-## macOS service
+Uninstall a portable copy by removing that binary. For Homebrew:
 
 ```sh
-claudex ctl setup                # initialize, sign in, install
-claudex                          # launch Claude Code through the gateway
-claudex --resume                 # pass Claude options through
-claudex ctl                      # health and preferences
-claudex ctl config               # guided preferences
-claudex ctl logs --follow        # gateway log
-claudex ctl restart              # apply a hand-edited config
+brew services stop marenzo/claudex/claudex
+brew uninstall marenzo/claudex/claudex
+brew untap marenzo/claudex
 ```
 
-`claudex ctl setup` does the following:
-
-- Copies the running binary to `~/.local/share/claudex/bin/claudex`.
-- Writes `~/.config/claudex/config.json` and the installed service definition.
-- Installs a `claudex` command in `~/.local/bin` that runs the installed binary.
-- Registers the launchd agent `local.claudex.proxy`.
-
-The service log is `~/.local/share/claudex/logs/service.log`. Setup keeps an
-existing config, client key, and Codex sign-in. It backs up every replaced file
-under `~/.local/share/claudex/backups/`. A failed installation restores them.
-
-To install a newer build, run `./dist/claudex ctl setup` from that build.
-Claudex waits for current requests before replacement and preserves dashboard
-and reviewer preferences. `ctl stop` works when the config is malformed.
-
-## Check an installation
-
-```sh
-claudex ctl                      # concise overview
-claudex ctl --verbose            # every check
-claudex ctl --json               # structured output
-claudex ctl --config "$HOME/.config/claudex-docker/host.json"
-```
-
-`claudex ctl` changes nothing. `--verbose` prints one line per check with a level, the
-check name, and a detail. The level is `ok`, `warn`, or `fail`. The command exits
-with status 1 when any check fails. Checks run in this order:
-
-| Check | What it does |
-| --- | --- |
-| `config` | Loads the config. Fails with a hint to run `claudex ctl setup` when the file is missing or invalid. The next four checks need the config and are skipped on failure. |
-| `client key` | Reads `client_key_file`. Warns when group or other users can read it and suggests `chmod 600`. |
-| `codex sign-in` | Fails with a hint to run `claudex ctl setup --login` when the sign-in is missing, malformed, disabled, or incomplete. Shows when the access token expires. It never refreshes the token. |
-| `gateway` | Sends `GET /healthz` to the listen address. Warns when nothing answers and says how to start the gateway. Fails when another program answers or the gateway rejects the client key. |
-| `client key accepted` | Sends `GET /v1/models` with the client key. Runs only when the gateway answers. |
-| `macos service` | Runs only on macOS. Reports that the service is not installed, or installed and loaded. Warns when it is installed but not loaded. |
-| `claude code` | Looks for `claude` on `PATH` and at `~/.local/bin/claude`. Warns when neither exists. |
-
-The second example checks the Docker setup from the host, because `host.json`
-shares the container's client key and sign-in.
-
-## Uninstall
-
-```sh
-claudex ctl uninstall
-```
-
-This stops the service and removes the installed binary, the `claudex` command,
-and plist. Config and credentials are kept in `~/.config/claudex`.
-
-To remove everything manually:
-
-```sh
-claudex ctl stop
-rm -f ~/Library/LaunchAgents/local.claudex.proxy.plist
-rm -f ~/.local/bin/claudex
-rm -rf ~/.local/share/claudex
-rm -rf ~/.config/claudex          # also removes the client key and Codex sign-in
-```
+Configuration, logs, and credentials remain after removing the binary. Fresh
+setups keep them under `~/.config/claudex`; removing that directory also deletes
+the Codex sign-in and client key. If your configuration uses custom credential
+paths, those files live separately and are not removed with the config directory.

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 	"github.com/marenzo/claudex/internal/tokens"
 )
 
@@ -34,7 +34,7 @@ func TestClientCancellationWinsOverReaderFailure(t *testing.T) {
 	for range 20 {
 		ctx, cancel := context.WithCancel(context.Background())
 		r := httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
-		record := &dashboard.Request{Started: time.Now()}
+		record := &metrics.Request{Started: time.Now()}
 		status := (&Server{}).consume(httptest.NewRecorder(), r, cancelingStreamReader{cancel}, nil, nil, "", true, record, nil, nil)
 		cancel()
 		if status != 499 || record.ErrorKind != "canceled" {
@@ -53,7 +53,7 @@ func TestClientCancellationWinsOverUpstreamErrorEvent(t *testing.T) {
 		for range 20 {
 			ctx, cancel := context.WithCancel(context.Background())
 			r := httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
-			record := &dashboard.Request{Started: time.Now()}
+			record := &metrics.Request{Started: time.Now()}
 			w := &trackedResponseWriter{ResponseRecorder: httptest.NewRecorder()}
 			s := &Server{}
 			body := cancellationBody{cancel: cancel, body: sse(event), err: io.EOF}
@@ -90,7 +90,7 @@ func TestStreamFailureDiagnosticsPreservePrivacyAndPartialFailure(t *testing.T) 
 				body := io.MultiReader(strings.NewReader(tc.prefix), failedStreamReader{tc.err})
 				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(body)}, nil
 			})
-			s.EnableDashboard()
+
 			w := request(s, "/v1/messages", `{"stream":true,"messages":[{"role":"user","content":"PRIVATE_PROMPT"}]}`)
 			if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.kind) || strings.Contains(w.Body.String(), "event: message_stop") {
 				t.Fatalf("failure was not surfaced: %d %s", w.Code, w.Body)
@@ -130,7 +130,7 @@ func TestStalledUpstreamStreamFailsInsteadOfHanging(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := httptest.NewRequest("POST", "/v1/messages", nil).WithContext(ctx)
-	record := &dashboard.Request{Started: time.Now()}
+	record := &metrics.Request{Started: time.Now()}
 	w := httptest.NewRecorder()
 	done := make(chan int, 1)
 	go func() {

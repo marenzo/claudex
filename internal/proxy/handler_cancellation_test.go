@@ -56,7 +56,7 @@ func TestHandlerCancellationBeforeStreaming(t *testing.T) {
 				cancel()
 				return nil, context.Canceled
 			})
-			s.EnableDashboard()
+
 			if phase == "credential_refresh" {
 				if err := os.WriteFile(s.Config.AuthFile, []byte(`{"type":"codex","access_token":"old","account_id":"test-account","refresh_token":"refresh-fixture","expired":"2000-01-01T00:00:00Z"}`), 0600); err != nil {
 					t.Fatal(err)
@@ -113,7 +113,7 @@ func TestChildTimeoutDoesNotBecomeCallerCancellation(t *testing.T) {
 				}
 				return nil, context.DeadlineExceeded
 			})
-			s.EnableDashboard()
+
 			if phase == "credential_refresh" {
 				if err := os.WriteFile(s.Config.AuthFile, []byte(`{"type":"codex","access_token":"old","account_id":"test-account","refresh_token":"refresh-fixture","expired":"2000-01-01T00:00:00Z"}`), 0600); err != nil {
 					t.Fatal(err)
@@ -144,7 +144,7 @@ func TestCanceledHTTPQuotaErrorDoesNotSetCooldown(t *testing.T) {
 			body: `{"error":{"type":"usage_limit_reached","resets_in_seconds":3600}}`,
 		}}, nil
 	})
-	s.EnableDashboard()
+
 	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"messages":[],"stream":true}`)).WithContext(ctx)
 	r.Header.Set("X-Api-Key", strings.Repeat("k", 32))
 	w := &trackedResponseWriter{ResponseRecorder: httptest.NewRecorder()}

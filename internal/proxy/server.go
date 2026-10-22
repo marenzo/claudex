@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,12 +14,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/marenzo/claudex/internal/auth"
 	"github.com/marenzo/claudex/internal/codex"
 	"github.com/marenzo/claudex/internal/config"
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 	"github.com/marenzo/claudex/internal/quota"
 	"github.com/marenzo/claudex/internal/tokens"
 	"github.com/tidwall/gjson"
@@ -31,9 +35,16 @@ type Server struct {
 	Quota           quota.State
 	key             []byte
 	version         string
-	metrics         *dashboard.Store
+	metrics         *metrics.Store
 	classifierSlots chan struct{}
 	control         controlState
+	preferences     atomic.Pointer[config.Config]
+	settingsMu      sync.Mutex
+	configPath      string
+	mode            string
+	instance        string
+	shutdown        chan struct{}
+	stopOnce        sync.Once
 }
 
 func New(cfg config.Config, client *codex.Client, version string) (*Server, error) {
@@ -45,11 +56,12 @@ func New(cfg config.Config, client *codex.Client, version string) (*Server, erro
 	if len(key) < 24 {
 		return nil, fmt.Errorf("local client key must contain at least 24 characters")
 	}
-	return &Server{Config: cfg, Client: client, key: key, version: version, classifierSlots: make(chan struct{}, 4)}, nil
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return nil, err
+	}
+	return &Server{metrics: metrics.New(), shutdown: make(chan struct{}), instance: hex.EncodeToString(id), mode: "foreground", control: controlState{idleSince: time.Now()}, Config: cfg, Client: client, key: key, version: version, classifierSlots: make(chan struct{}, 4)}, nil
 }
-
-// EnableDashboard must be called before serving requests. Disabled by default.
-func (s *Server) EnableDashboard() { s.metrics = dashboard.New() }
 
 func (s *Server) RunRecovery(ctx context.Context) {
 	s.Quota.Run(ctx, s.Client.QuotaAvailable, func() {
@@ -62,31 +74,26 @@ func (s *Server) RunRecovery(ctx context.Context) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	if s.metrics != nil {
-		mux.HandleFunc("GET /dashboard/api", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Cache-Control", "no-store")
-			writeJSON(w, 200, s.metrics.Snapshot())
-		})
-	}
+	mux.HandleFunc("GET /_claudex/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, s.metrics.Snapshot())
+	})
+	mux.HandleFunc("/_claudex/config", s.controlConfig)
+	mux.HandleFunc("POST /_claudex/sessions", s.controlSession)
 	mux.HandleFunc("POST /v1/messages", s.messages)
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.countTokens)
 	mux.HandleFunc("GET /v1/models", s.models)
 	mux.HandleFunc("GET /v1/models/{id}", s.model)
 	mux.HandleFunc("GET /_claudex/status", s.controlStatus)
-	mux.HandleFunc("/_claudex/drain", s.controlDrain)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"product": "claudex", "status": "ok", "version": s.version, "model": s.Config.Model})
+		writeJSON(w, 200, map[string]any{"product": "claudex", "status": "ok", "version": s.version, "model": s.currentConfig().Model})
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{Status: 404, Type: "not_found_error", Message: "Unsupported endpoint"})
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.metrics != nil && r.Method == http.MethodGet && dashboard.IsAssetPath(r.URL.Path) {
-			dashboard.Static(w, r)
-			return
-		}
 		// Liveness probes need no key: HEAD /api/hello for Claude Code, and
-		// GET /healthz, served by the mux, for Docker, launchd, and claudex ctl.
+		// GET /healthz, served by the mux, for Docker and claudex ctl.
 		if r.Method == http.MethodHead && r.URL.Path == "/api/hello" {
 			w.WriteHeader(200)
 			return
@@ -120,8 +127,8 @@ func (s *Server) modelInfo(model config.Model) map[string]any {
 	return map[string]any{
 		"id": model.ID, "type": "model", "object": "model", "owned_by": "openai", "display_name": model.Name,
 		"description": "Codex subscription; select with --model " + model.Alias,
-		"created_at":  "2026-09-14T00:00:00Z", "max_input_tokens": s.Config.ContextWindow, "max_output_tokens": 128000,
-		"context_length": s.Config.ContextWindow, "max_completion_tokens": 128000,
+		"created_at":  "2026-09-14T00:00:00Z", "max_input_tokens": s.currentConfig().ContextWindow, "max_output_tokens": 128000,
+		"context_length": s.currentConfig().ContextWindow, "max_completion_tokens": 128000,
 		"capabilities": map[string]any{
 			"thinking": map[string]any{"supported": true},
 			"effort":   map[string]any{"supported": true, "levels": model.Efforts},
@@ -178,7 +185,7 @@ func (s *Server) countTokens(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errRead)
 		return
 	}
-	if _, _, errPrepare := prepareRequest(raw, s.Config); errPrepare != nil {
+	if _, _, errPrepare := prepareRequest(raw, s.currentConfig()); errPrepare != nil {
 		writeError(w, &apiError{Status: 400, Type: "invalid_request_error", Message: errPrepare.Error()})
 		return
 	}
@@ -191,12 +198,13 @@ func (s *Server) countTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
+	cfg := s.currentConfig()
 	started := time.Now()
 	status := 200
 	errorType := ""
-	model := s.Config.Model
-	record := dashboard.Request{Started: started, Model: model}
-	errorSecrets := []string{string(s.key), s.Config.AuthFile, s.Config.ClientKeyFile}
+	model := cfg.Model
+	record := metrics.Request{Started: started, Model: model}
+	errorSecrets := []string{string(s.key), cfg.AuthFile, cfg.ClientKeyFile}
 	if s.metrics != nil {
 		s.metrics.Begin()
 	}
@@ -205,7 +213,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		if s.metrics != nil {
 			if status == 499 {
 				record.ErrorKind = "canceled"
-				record.Error = &dashboard.ErrorDetails{Source: "proxy", Type: "canceled", Message: "The client canceled or disconnected before completion."}
+				record.Error = &metrics.ErrorDetails{Source: "proxy", Type: "canceled", Message: "The client canceled or disconnected before completion."}
 			}
 			record.Error = redactErrorDetails(record.Error, errorSecrets)
 			s.metrics.Finish(record)
@@ -240,7 +248,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.control.admit() {
 		w.Header().Set("Retry-After", "1")
-		fail(&apiError{Status: 503, Type: "overloaded_error", Message: "Claudex is applying settings; retry shortly."})
+		fail(&apiError{Status: 503, Type: "overloaded_error", Message: "Claudex is shutting down; retry shortly."})
 		return
 	}
 	defer s.control.finish()
@@ -249,13 +257,13 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		fail(errRead)
 		return
 	}
-	review, errReview := newSafeguardReview(raw, s.Config)
+	review, errReview := newSafeguardReview(raw, cfg)
 	if errReview != nil {
 		record.ErrorKind = "classifier_context"
 		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errReview.Error()})
 		return
 	}
-	body, session, errPrepare := prepareRequest(raw, s.Config)
+	body, session, errPrepare := prepareRequest(raw, cfg)
 	if errPrepare != nil {
 		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errPrepare.Error()})
 		return
@@ -272,7 +280,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	errorSecrets = append(errorSecrets, credential.AccessToken, credential.RefreshToken, credential.AccountID)
 	if errAuth != nil {
 		// Keep file paths and token endpoint details out of the client response.
-		// The service log and the dashboard keep the detail.
+		// The gateway log and the TUI keep the detail.
 		message := "Codex sign-in could not be used or refreshed. Run claudex ctl setup --login if this continues."
 		if errors.Is(errAuth, auth.ErrNotSignedIn) {
 			message = "Not signed in to Codex. Run claudex ctl setup --login."
@@ -281,7 +289,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("Codex sign-in unavailable", "error", errAuth.Error())
 		}
 		fail(&apiError{Status: 401, Type: "authentication_error", Message: message,
-			Details: &dashboard.ErrorDetails{Source: "proxy", Type: fmt.Sprintf("%T", errAuth), Message: errAuth.Error()}})
+			Details: &metrics.ErrorDetails{Source: "proxy", Type: fmt.Sprintf("%T", errAuth), Message: errAuth.Error()}})
 		return
 	}
 	if remaining := s.Quota.Remaining(credential.AccountID, time.Now()); remaining > 0 {
@@ -298,7 +306,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if errUpstream != nil {
 		record.ErrorKind = streamErrorKind(errUpstream)
 		fail(&apiError{Status: 502, Type: "api_error", Message: "Could not connect to Codex: " + errUpstream.Error(),
-			Details: &dashboard.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", errUpstream), Message: errUpstream.Error()}})
+			Details: &metrics.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", errUpstream), Message: errUpstream.Error()}})
 		return
 	}
 	defer func() {
