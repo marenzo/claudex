@@ -54,9 +54,22 @@ func liveProtocolServer(t *testing.T) (*Server, auth.Credential) {
 // New call IDs should preserve history reuse. Changed permissions must produce
 // a fresh authorization decision even when that exact policy prefix is cached.
 func TestLiveClassifierPrefixCache(t *testing.T) {
+	testLiveClassifierPrefixCache(t, false)
+}
+
+func TestLiveClassifierLargeHistoryCache(t *testing.T) {
+	testLiveClassifierPrefixCache(t, true)
+}
+
+func testLiveClassifierPrefixCache(t *testing.T, largeHistory bool) {
+	t.Helper()
 	s, credential := liveProtocolServer(t)
 	s.EnableDashboard()
 	raw, _ := sjson.SetBytes([]byte(reviewRequest(false)), "messages.0.content", "Read /fixture/src.rs for review. Do not write it.\n"+strings.Repeat("Synthetic source context: the fixture is read-only and has no external side effects.\n", 1800))
+	if largeHistory {
+		raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": "large_historical_edit", "name": "Edit", "input": map[string]any{"file_path": "/fixture/src.rs", "new_string": strings.Repeat("const fixture_value = 7; // synthetic prior edit\n", 17000)}}}})
+		raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "large_historical_edit", "content": "Historical fixture edit completed before the read-only review request."}}})
+	}
 	for i := 0; i < 3; i++ {
 		if i > 0 {
 			raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": fmt.Sprintf("cache_fixture_%d", i-1), "name": "Read", "input": map[string]any{"file_path": "/fixture/src.rs"}}}})

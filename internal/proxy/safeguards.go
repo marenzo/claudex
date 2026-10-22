@@ -21,6 +21,10 @@ import (
 
 const safeguardType = "dangerous_tool_use"
 const classifierInputLimit = 1024 * 1024
+
+// Evidence wrappers add keys and message boundaries, not new source context.
+// Preserve the original 1 MiB source budget and bound this overhead separately.
+const classifierEvidenceOverheadLimit = 64 * 1024
 const classifierOutputLimit = 256 * 1024
 const classifierTimeout = 60 * time.Second
 const classifierReasoningEffort = "high"
@@ -357,7 +361,7 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 			evidenceBytes += len(part.Text)
 		}
 	}
-	if evidenceBytes > classifierInputLimit {
+	if evidenceBytes > classifierInputLimit+classifierEvidenceOverheadLimit {
 		return nil, errors.New("classifier evidence exceeds limit")
 	}
 	// Keep the schema stable across batches. IDs are checked against the exact
@@ -507,6 +511,7 @@ func classifierEvidence(payload map[string]json.RawMessage) []classifierEvidence
 	}
 	appendEvidence(context)
 	for _, message := range gjson.ParseBytes(payload["messages"]).Array() {
+		history := json.RawMessage(message.Raw)
 		if message.Get("role").String() == "assistant" {
 			var calls []reviewedTool
 			for _, part := range message.Get("content").Array() {
@@ -517,10 +522,18 @@ func classifierEvidence(payload map[string]json.RawMessage) []classifierEvidence
 			if len(calls) > 0 {
 				if raw, err := json.Marshal(calls); err == nil {
 					appendEvidence(map[string]json.RawMessage{"assistant_tool_uses": raw})
+					// Arguments already appear in the canonical call envelope.
+					// Keep all other original fields, but avoid doubling large
+					// historical edits, scripts and other tool inputs.
+					for i, part := range message.Get("content").Array() {
+						if part.Get("type").String() == "tool_use" {
+							history, _ = sjson.DeleteBytes(history, fmt.Sprintf("content.%d.input", i))
+						}
+					}
 				}
 			}
 		}
-		appendEvidence(map[string]json.RawMessage{"transcript_message": json.RawMessage(message.Raw)})
+		appendEvidence(map[string]json.RawMessage{"transcript_message": history})
 	}
 	appendEvidence(map[string]json.RawMessage{"assistant_tool_uses": payload["tool_uses"]})
 	return input
@@ -536,6 +549,8 @@ func classifierErrorKind(err error) string {
 		return "canceled"
 	case strings.HasPrefix(err.Error(), "classifier HTTP "):
 		return "classifier_http"
+	case strings.Contains(err.Error(), "exceeds limit"):
+		return "classifier_input_limit"
 	case strings.Contains(err.Error(), "verdict") || strings.Contains(err.Error(), "JSON"):
 		return "classifier_invalid_verdict"
 	default:

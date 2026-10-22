@@ -168,6 +168,40 @@ func TestReviewDropsBillingFingerprintAndPreservesMemory(t *testing.T) {
 	}
 }
 
+func TestClassifierPreservesSourceBudgetNearLimit(t *testing.T) {
+	contacted := false
+	s := fixture(t, func(r *http.Request) (*http.Response, error) {
+		contacted = true
+		body, _ := io.ReadAll(r.Body)
+		input := gjson.GetBytes(body, "input").Array()
+		joined := ""
+		for _, message := range input {
+			joined += message.Get("content.0.text").String()
+		}
+		if strings.Count(joined, "HISTORICAL_ARGUMENT_MARKER") != 1 {
+			t.Error("historical arguments duplicated or dropped")
+		}
+		return upstreamResponse(200, classifierResponse(`{"verdicts":[{"id":"current","outcome":"not_flagged","explanation":"read fixture"}]}`)), nil
+	})
+	s.Config.AutoModeClassifierModel = "sol"
+	raw, _ := sjson.SetBytes([]byte(reviewRequest(false)), "messages", []any{
+		map[string]any{"role": "user", "content": "Review the fixture source; prior large edit is historical context."},
+		map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": "historical", "name": "Edit", "input": map[string]any{"file_path": "/fixture/source", "new_string": "HISTORICAL_ARGUMENT_MARKER" + strings.Repeat("a", classifierInputLimit-3000)}}}},
+		map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "historical", "content": "Edit completed"}}},
+	})
+	review, err := newSafeguardReview(raw, s.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review.calls = []reviewedTool{{ID: "current", Name: "Read", Input: json.RawMessage(`{"file_path":"/fixture/source"}`)}}
+	if _, err := s.classifyTools(context.Background(), review, "test-account"); err != nil {
+		t.Fatal(err)
+	}
+	if !contacted {
+		t.Fatal("accepted source context was rejected after evidence expansion")
+	}
+}
+
 func TestSafeguardFailureReleasesNoToolCalls(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
