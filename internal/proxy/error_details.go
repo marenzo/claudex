@@ -6,7 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 )
 
 const errorMessageLimit = 4096
@@ -19,12 +19,12 @@ var (
 	errorEmail       = regexp.MustCompile(`(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b`)
 )
 
-func recordAPIError(record *dashboard.Request, e *apiError) {
+func recordAPIError(record *metrics.Request, e *apiError) {
 	if e.Details != nil {
 		detail := *e.Details
 		record.Error = &detail
 	} else {
-		record.Error = &dashboard.ErrorDetails{Source: "proxy", Type: e.Type, Message: e.Message}
+		record.Error = &metrics.ErrorDetails{Source: "proxy", Type: e.Type, Message: e.Message}
 	}
 	if record.Error.Message == "" {
 		record.Error.Message = e.Message
@@ -35,7 +35,7 @@ func recordAPIError(record *dashboard.Request, e *apiError) {
 // Exact known credentials are removed before truncation; common credential and
 // identity formats are additionally redacted. Arbitrary upstream echoes cannot
 // be guaranteed free of sensitive data, so excerpts stay in authenticated memory.
-func redactErrorDetails(detail *dashboard.ErrorDetails, secrets []string) *dashboard.ErrorDetails {
+func redactErrorDetails(detail *metrics.ErrorDetails, secrets []string) *metrics.ErrorDetails {
 	if detail == nil {
 		return nil
 	}

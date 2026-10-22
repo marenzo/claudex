@@ -2,7 +2,7 @@
 
 Claudex translates Claude Code's Messages API traffic for a single Codex
 subscription account. It has no provider plugins, model downloads, generic OpenAI
-endpoints, remote management, or account load balancing.
+endpoints, or account load balancing.
 
 ```mermaid
 flowchart LR
@@ -11,12 +11,12 @@ flowchart LR
   Codex -->|Response events| Gateway
   Gateway -->|Claude SSE / JSON| Claude
   Gateway -->|Read-only usage check| Usage[Subscription usage endpoint]
-  Browser[Optional dashboard] -->|Client key| Gateway
+  TUI[Bundled terminal dashboard] -->|Client key| Gateway
 ```
 
 ## Request lifecycle
 
-1. The launcher starts the macOS service, derives Claude settings from config, and
+1. The launcher starts or reuses a gateway, derives active Claude settings, and
    injects the client key. Claude Code never receives the Codex sign-in token.
 2. Claudex authenticates the request and bounds its body. It resolves the requested
    model and translates Claude system prompts, messages, and tools to Codex
@@ -36,8 +36,8 @@ flowchart LR
    reasoning state for later turns. Codex search activity is left out of history.
    Anthropic accepts search-result replay only with opaque state that Anthropic
    issued. A terminal failure never becomes an empty successful turn.
-6. With `-dashboard`, the gateway records request metadata and token usage. See
-   [the dashboard notes](dashboard.md) for what is kept.
+6. The gateway always records bounded request metadata and token usage. See
+   [the dashboard notes](tui.md) for what is kept.
 
 ## HTTP routes
 
@@ -51,25 +51,31 @@ checked on its own.
 | `POST /v1/messages/count_tokens` | Local token estimate |
 | `GET /v1/models` | Model list |
 | `GET /v1/models/{id}` | One model |
-| `GET /dashboard/api` | Dashboard metrics when enabled |
+| `GET /_claudex/metrics` | Bounded metrics snapshot |
 | `GET /_claudex/status` | Authenticated gateway state for `claudex ctl` |
-| `POST /_claudex/drain` | Acquire or renew a short lease while waiting for active requests |
-| `DELETE /_claudex/drain` | Release a drain lease |
 
 These routes need no key:
 
 | Route | Purpose |
 | --- | --- |
-| `GET /healthz` | Liveness probe for Docker, launchd, and `claudex ctl` |
+| `GET /healthz` | Liveness probe for Docker and `claudex ctl` |
 | `HEAD /api/hello` | Connectivity probe for Claude Code |
-| `GET /dashboard` and its embedded assets | Dashboard login page when enabled |
 
-`GET /healthz` returns JSON with `product`, `status`, `version`, and the default
-`model`. `product` is always `claudex`. The dashboard setting is persisted in
-config; a foreground run can override it with `-dashboard`. When disabled, no
-dashboard routes exist. A drain lease briefly rejects new generation requests
-with retryable HTTP 503 while existing requests finish; it expires if the
-controlling command exits unexpectedly.
+`GET /healthz` returns `product`, `status`, `version`, and the default `model`.
+`GET /_claudex/status` identifies the control API, process instance, lifetime mode,
+attached clients, active requests, revision, and active preferences. The launcher
+reuses authenticated compatible gateways and uses their active defaults.
+
+`POST /_claudex/sessions` opens an authenticated NDJSON connection with kind
+`claude` or `tui`. Disconnecting releases ownership. Only automatic gateways exit
+when they have no attached clients or active requests for five seconds.
+
+`GET /_claudex/config` returns preferences, startup paths, revision and writability.
+`PUT /_claudex/config` accepts only live preference fields and requires `If-Match`
+with the quoted revision, scoped to this process instance and configuration.
+Conflicts and drafts from before a restart return 412. Saves validate, persist atomically,
+and then publish an immutable configuration snapshot. In-flight requests, including
+permission reviews, keep their admitted snapshot. Startup fields require a restart.
 
 ## Reasoning and tools
 
@@ -117,6 +123,16 @@ or `web_search_tool_result` blocks. Those blocks cannot be resumed without
 in Claude Code. Artifact publishing is blocked because no subscription bridge for
 it exists. Creating ordinary files still works.
 
+## Prompt caching
+
+Generation requests derive a hashed cache identity from Claude's user/session
+metadata and send it through `prompt_cache_key` and `Session_id`. The translator
+removes the changing billing attribution block while retaining actual application
+instructions. The optional reviewer has a separate stable identity and output
+schema, with permission context ahead of history. Changes to permission evidence
+therefore invalidate the relevant prefix. Cache use is decided upstream and
+reported through usage counts. See [prompt caching](prompt-caching.md).
+
 ## Quota recovery
 
 A subscription `usage_limit_reached` response records an in-memory cooldown. While
@@ -140,6 +156,8 @@ bypass an exhausted subscription, and it offers no account or model failover.
 | `internal/translator/codex/claude` | Claude and Responses protocol conversion |
 | `internal/quota` | Cooldown evidence, generation checks, recovery |
 | `internal/tokens` | Approximate local token counting |
-| `internal/dashboard` | Bounded usage history and local dashboard |
-| `internal/launcher` | The `install`, `service`, `launch`, and `status` commands: macOS service management, the Claude Code launcher, and setup checks |
+| `internal/metrics` | Bounded usage history and sampling |
+| `internal/tui` | Terminal views, polling, and configuration editing |
+| `internal/control` | Shared authenticated control protocol and client |
+| `internal/launcher` | Automatic worker startup, session ownership, Claude settings and bounded logs |
 | `internal/signature`, `internal/translator/common` | Reasoning-signature checks and shared Claude message helpers |

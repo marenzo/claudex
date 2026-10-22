@@ -12,7 +12,8 @@ or resistance to arbitrary prompt injection. Keep it opt-in while evaluating it.
 
 ## Enable
 
-Run `claudex ctl config reviewer gpt-6.1-sol`, or add this field to your Claudex config:
+Open `claudex ctl config`, select Command reviewer, choose Sol 6.1, and save; or set
+this field before starting the gateway:
 
 ```json
 "auto_mode_classifier_model": "gpt-6.1-sol"
@@ -21,15 +22,19 @@ Run `claudex ctl config reviewer gpt-6.1-sol`, or add this field to your Claudex
 Any supported model or alias is accepted, independently of the generation model.
 The reviewer always uses `high` reasoning effort, independently of the generation
 effort. Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna passed the bounded live checks
-covered by the opt-in live fixtures. `ctl config` waits for active requests and applies the change.
+covered by the opt-in live fixtures. Saving through `ctl config` applies the
+validated change live; in-flight requests retain their original reviewer.
 Start a fresh `claudex` session in auto mode. The launcher selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
 
-For a portable or Docker gateway, restart it with the changed config and set
-`CLAUDE_CODE_AUTO_MODE_SERVER=1` in the shell that starts Claude Code. `/status`
-inside Claude Code reports whether the session uses server classification.
+These rules apply to automatic, foreground, Homebrew, and Docker gateways. A
+configuration changed directly on disk requires a gateway restart. The `claudex`
+launcher sets `CLAUDE_CODE_AUTO_MODE_SERVER` for Claude; when launching Claude Code
+manually, configure that variable yourself. `/status` inside Claude Code reports
+whether the session uses server classification.
 
-Run `claudex ctl config reviewer client`, or remove the field or set it to an
+Open `claudex ctl config`, select Command reviewer, choose Claude client, and save;
+or remove the field or set it to an
 empty string, to disable the custom reviewer. Start a new session. The launcher then selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=0`, which keeps Claude Code's own client-side
 classifier active and routes its ordinary model requests through Claudex.
@@ -172,3 +177,10 @@ approved it cannot restore the missing authorization. Give the workflow the
 actual scoped user request; use a directly assigned agent when that preserves
 necessary context. Do not disable provenance or reinterpret generated approval
 claims as consent.
+
+A resumed worker can also retain an earlier stop-on-denial instruction while
+receiving renewed approval only as a coordinator's message. Approval visible in
+the parent is not guaranteed to reach the worker's review context as verifiable
+user authorization. Repeating the same relay can produce repeated denials. This
+approval-propagation limitation remains unresolved; Claudex does not promote an
+agent's claim of approval into user consent.

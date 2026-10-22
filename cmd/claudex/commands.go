@@ -5,58 +5,55 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/marenzo/claudex/internal/auth"
+	"github.com/marenzo/claudex/internal/config"
+	"github.com/marenzo/claudex/internal/control"
+	"github.com/marenzo/claudex/internal/launcher"
 	"io"
 	"os"
 	"os/signal"
-	"runtime"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
-
-	"github.com/marenzo/claudex/internal/auth"
-	"github.com/marenzo/claudex/internal/config"
-	"github.com/marenzo/claudex/internal/launcher"
+	"time"
 )
 
-const usageText = `Claudex starts Claude Code with GPT through a local Codex gateway.
+const usageText = `Claudex runs Claude Code with GPT through your Codex subscription.
 
-  claudex [Claude arguments]       Start Claude Code (for example --resume)
-  claudex ctl                      Show gateway health and preferences
-  claudex ctl setup                Set up or repair Claudex
-  claudex ctl config               Change preferences
-  claudex ctl logs                 Read gateway logs
-  claudex ctl restart              Restart the gateway
+  claudex [Claude arguments]     Start Claude with an automatic gateway
+  claudex ctl                    Open the terminal dashboard
+  claudex ctl config             Open dashboard settings
+  claudex ctl status [--json]     Inspect the running gateway
+  claudex ctl setup              Prepare config and Codex sign-in
+  claudex ctl run                Run a persistent foreground gateway
+  claudex ctl logs [--follow]    Read gateway logs
+  claudex ctl --version          Show gateway version
 
-Also available: ctl start, stop, run, uninstall, --version, --help.
-Claude options and commands, including --help and --version, pass through.
+Only ctl belongs to Claudex; other arguments pass through to Claude Code.
 `
 
 func usage(w io.Writer) { fmt.Fprint(w, usageText) }
 
-// errHelpShown ends a command after it printed its own -help output.
 var errHelpShown = errors.New("help shown")
 
-// Only ctl belongs to Claudex. Other arguments belong to Claude Code.
 func dispatch(args []string) error {
 	if len(args) > 0 && args[0] == "ctl" {
-		if err := command(args[1:]); !errors.Is(err, errHelpShown) {
-			return err
+		err := command(args[1:])
+		if errors.Is(err, errHelpShown) {
+			return nil
 		}
-		return nil
-	}
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") && interactive() {
-		fmt.Fprintln(os.Stderr, "Claudex controls: claudex ctl --help")
+		return err
 	}
 	return cmdLaunch(args)
 }
-
 func command(args []string) error {
 	if len(args) == 0 {
-		return cmdOverview(nil)
+		return cmdTUI(nil, false)
 	}
-	name, rest := args[0], args[1:]
-	switch name {
-	case "help", "-h", "-help", "--help":
+	rest := args[1:]
+	switch args[0] {
+	case "help", "--help", "-h":
 		usage(os.Stdout)
 		return nil
 	case "setup":
@@ -64,29 +61,24 @@ func command(args []string) error {
 	case "run":
 		return runGateway(rest)
 	case "config":
-		return cmdConfig(rest)
+		return cmdTUI(rest, true)
+	case "status":
+		return cmdStatus(rest)
 	case "logs":
 		return cmdLogs(rest)
-	case "start", "stop", "restart":
-		return cmdService(name, rest)
-	case "uninstall":
-		return cmdUninstall(rest)
-	case "--version", "-v":
-		if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), rest, "usage: claudex ctl --version"); err != nil {
+	case "--version":
+		if err := parseFlags(flag.NewFlagSet("version", flag.ContinueOnError), rest, "usage: claudex ctl --version"); err != nil {
 			return err
 		}
 		fmt.Printf("claudex %s (%s; %s)\n", buildVersion(), Commit, BuildDate)
 		return nil
 	default:
-		if strings.HasPrefix(name, "-") {
-			return cmdOverview(args)
+		if strings.HasPrefix(args[0], "-") {
+			return cmdTUI(args, false)
 		}
-		return usageError{fmt.Sprintf("unknown control command %q; run claudex ctl --help", name)}
+		return usageError{fmt.Sprintf("unknown control command %q; run claudex ctl --help", args[0])}
 	}
 }
-
-// parseFlags parses a command's flags. It rejects positional arguments, and
-// -help prints the usage line with the flag defaults.
 func parseFlags(set *flag.FlagSet, args []string, line string) error {
 	set.SetOutput(io.Discard)
 	err := set.Parse(args)
@@ -101,135 +93,116 @@ func parseFlags(set *flag.FlagSet, args []string, line string) error {
 	}
 	return nil
 }
-
 func signalContext() (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 }
-
-// signIn pauses the installed macOS service while signing in to its credential
-// store, so sign-in and token refresh never race on the same file.
-func signIn(ctx context.Context, paths launcher.Paths, path string, cfg config.Config, noBrowser bool) error {
-	if runtime.GOOS == "darwin" && path == paths.ConfigFile() {
-		return launcher.NewService(paths).SignIn(ctx, cfg, noBrowser)
-	}
-	if err := auth.NewStore(cfg.AuthFile).Login(ctx, noBrowser, os.Stdout); err != nil {
-		return err
-	}
-	fmt.Println("Codex subscription sign-in saved.")
-	return nil
-}
-
 func cmdSetup(args []string) error {
 	set := flag.NewFlagSet("setup", flag.ContinueOnError)
-	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
-	noBrowser := set.Bool("no-browser", false, "Print the sign-in URL without opening a browser")
-	noStart := set.Bool("no-start", false, "Install without starting the service")
-	noLogin := set.Bool("no-login", false, "Initialize without signing in")
-	forceLogin := set.Bool("login", false, "Sign in again even when credentials are valid")
-	if err := parseFlags(set, args, "usage: claudex ctl setup [--config PATH] [--no-browser] [--no-login] [--login] [--no-start]"); err != nil {
+	path := set.String("config", config.DefaultPath(), "Configuration path")
+	noBrowser := set.Bool("no-browser", false, "Print sign-in URL without opening a browser")
+	noLogin := set.Bool("no-login", false, "Prepare configuration without sign-in")
+	login := set.Bool("login", false, "Sign in again")
+	if err := parseFlags(set, args, "usage: claudex ctl setup [--config PATH] [--no-browser] [--no-login|--login]"); err != nil {
 		return err
 	}
-	if *noLogin && *forceLogin {
+	if *noLogin && *login {
 		return usageError{"choose either --login or --no-login"}
 	}
-	paths, err := launcher.DefaultPaths()
+	absolute, err := filepath.Abs(*path)
 	if err != nil {
 		return err
 	}
-	return launcher.WithControlLock(paths, func() error {
-		if err := config.Initialize(*path); err != nil && !errors.Is(err, config.ErrExists) {
-			return err
-		}
-		cfg, err := config.Load(*path)
-		if err != nil {
-			return err
-		}
-		ctx, stop := signalContext()
-		defer stop()
-		if *noLogin {
-			fmt.Println("Codex sign-in skipped.")
-		} else if _, errCheck := auth.NewStore(cfg.AuthFile).Check(); errCheck == nil && !*forceLogin {
-			fmt.Println("Already signed in to Codex.")
-		} else if !interactive() && !*noBrowser {
-			return errors.New("signing in to Codex needs a terminal; use claudex ctl setup --no-browser or --no-login")
-		} else if err := signIn(ctx, paths, *path, cfg, *noBrowser); err != nil {
-			return err
-		}
-		if runtime.GOOS != "darwin" || *path != paths.ConfigFile() {
-			fmt.Println("Config ready. Start the foreground gateway with: claudex ctl run")
+	ctx, cancel := signalContext()
+	defer cancel()
+	err = config.WithLock(ctx, absolute, func() error {
+		err := config.Initialize(absolute)
+		if errors.Is(err, config.ErrExists) {
 			return nil
 		}
-		return launcher.Install(launcher.NewService(paths), launcher.InstallOptions{NoStart: *noStart, Context: ctx})
-	})
-}
-
-func cmdService(name string, args []string) error {
-	if err := parseFlags(flag.NewFlagSet(name, flag.ContinueOnError), args, "usage: claudex ctl "+name); err != nil {
 		return err
-	}
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("claudex ctl %s manages the macOS service; elsewhere use claudex ctl run", name)
-	}
-	paths, err := launcher.DefaultPaths()
+	})
 	if err != nil {
 		return err
 	}
-	service := launcher.NewService(paths)
-	// Stopping a broken installation must not depend on its config or key.
-	if name == "stop" {
-		if err := service.Stop(); err != nil {
+	cfg, err := config.Load(absolute)
+	if err != nil {
+		return err
+	}
+	store := auth.NewStore(cfg.AuthFile)
+	if !*noLogin {
+		_, err = store.Check()
+		if err != nil || *login {
+			if !interactive() && !*noBrowser {
+				return errors.New("sign-in needs a terminal; use ctl setup --no-browser or --no-login")
+			}
+			if err := store.Login(ctx, *noBrowser, os.Stdout); err != nil {
+				return err
+			}
+		}
+	}
+	fmt.Println("Configuration ready. Run claudex, or claudex ctl run for a persistent foreground gateway.")
+	return nil
+}
+func cmdLaunch(args []string) error {
+	claude, err := launcher.ClaudePath()
+	if err != nil {
+		return err
+	}
+	if launcher.NativeCommand(args) {
+		return syscall.Exec(claude, append([]string{claude}, args...), os.Environ())
+	}
+	path, err := filepath.Abs(config.DefaultPath())
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if !interactive() {
+			return errors.New("run claudex ctl setup before noninteractive use")
+		}
+		if err := cmdSetup([]string{"--config", path}); err != nil {
 			return err
 		}
-		fmt.Println("Claudex stopped.")
-		return nil
 	}
-	cfg, err := config.Load(paths.ConfigFile())
+	cfg, err := config.Load(path)
 	if err != nil {
-		return fmt.Errorf("cannot read gateway settings at %s; repair the config or rerun claudex ctl setup: %w", paths.ConfigFile(), err)
+		return err
 	}
-	switch name {
-	case "restart":
-		ctx, cancel := signalContext()
-		defer cancel()
-		if service.Launchd.Loaded(launcher.Label) {
-			release, err := service.Shutdown(ctx, cfg)
-			if err != nil {
+	c, err := control.New("http://"+cfg.Listen, cfg.ClientKeyFile)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for attempt := 0; attempt < 10; attempt++ {
+		status, err := launcher.Ensure(ctx, path, c)
+		if errors.Is(err, auth.ErrNotSignedIn) && interactive() {
+			if err := cmdSetup([]string{"--config", path, "--login"}); err != nil {
 				return err
 			}
-			defer release()
+			continue
 		}
-	}
-	return service.Report(cfg)
-}
-
-func cmdLaunch(args []string) error {
-	paths, err := launcher.DefaultPaths()
-	if err != nil {
-		return err
-	}
-	if len(args) == 0 && interactive() && runtime.GOOS == "darwin" {
-		if _, err := os.Stat(paths.ServicePlist()); os.IsNotExist(err) {
-			fmt.Println("Claudex will prepare your Codex sign-in and macOS service.")
-			if err := cmdSetup(nil); err != nil {
-				return err
+		if err == nil {
+			var active config.Config
+			active, err = status.Preferences.Apply(cfg)
+			if err == nil {
+				err = launcher.Run(claude, args, active, c)
 			}
 		}
+		var response *control.HTTPError
+		transient := errors.As(err, &response) && response.Status == 503
+		transient = transient || errors.Is(err, syscall.ECONNREFUSED)
+		if !transient {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	return launcher.NewLauncher(launcher.NewService(paths)).Run(args)
-}
+	return errors.New("gateway was shutting down repeatedly; retry claudex")
 
-func cmdUninstall(args []string) error {
-	if err := parseFlags(flag.NewFlagSet("uninstall", flag.ContinueOnError), args, "usage: claudex ctl uninstall"); err != nil {
-		return err
-	}
-	paths, err := launcher.DefaultPaths()
-	if err != nil {
-		return err
-	}
-	return launcher.Uninstall(launcher.NewService(paths))
 }
-
-// buildVersion falls back to the Go module version when no -ldflags stamp is set.
 func buildVersion() string {
 	if Version != "dev" {
 		return Version
@@ -240,14 +213,11 @@ func buildVersion() string {
 	return Version
 }
 
-// usageError is a command-line mistake; main exits with status 2.
 type usageError struct{ message string }
 
 func (e usageError) Error() string { return e.message }
 
-// serveError happened after the gateway started serving; main logs it as JSON.
 type serveError struct{ err error }
 
 func (e serveError) Error() string { return e.err.Error() }
-
 func (e serveError) Unwrap() error { return e.err }

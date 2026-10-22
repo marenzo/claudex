@@ -6,36 +6,38 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 ARCHIVE ?= dist/claudex-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
 IMAGE ?= claudex:local
-STATICCHECK_VERSION ?= v0.8.1
+STATICCHECK_VERSION ?= v0.8.2
 GOVULNCHECK_VERSION ?= v1.8.0
+GITLEAKS_VERSION ?= v8.30.1
+PREFIX ?= $(HOME)/.local
 
-.PHONY: build package test test-dashboard check lint install docker clean e2e
+.PHONY: build package test check lint secrets install docker clean e2e
 
 build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags '$(LDFLAGS)' -o dist/claudex ./cmd/claudex
 
 package: build
-	COPYFILE_DISABLE=1 tar -czf '$(ARCHIVE)' dist/claudex examples docs README.md LICENSE THIRD_PARTY_NOTICES.md
+	COPYFILE_DISABLE=1 tar -czf '$(ARCHIVE)' dist/claudex examples docs README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md
 
-test: test-dashboard
+test:
 	go test -race ./...
-
-test-dashboard:
-	node --check internal/dashboard/app.js
-	node --check internal/dashboard/analytics.js
-	node --test internal/dashboard/analytics_test.cjs
 
 check: test
 	go vet ./...
 	@test -z "$$(gofmt -l cmd internal)" || (gofmt -l cmd internal; exit 1)
 
-# Static analysis and known-vulnerability scan; downloads the pinned tools, so it needs network.
-lint:
+# Static analysis, known-vulnerability and secret scans; downloads the pinned tools, so it needs network.
+lint: secrets
 	go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
+# Scans every commit reachable from the checkout for leaked credentials.
+secrets:
+	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) git --no-banner --redact .
+
 install: build
-	./dist/claudex ctl setup $(INSTALL_FLAGS)
+	install -d "$(DESTDIR)$(PREFIX)/bin"
+	install -m 755 dist/claudex "$(DESTDIR)$(PREFIX)/bin/claudex"
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t $(IMAGE) .

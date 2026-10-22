@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deliberately fake credentials are named fixture-*"
+regexes = ['''^fixture-''']

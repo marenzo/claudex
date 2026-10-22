@@ -1,6 +1,6 @@
-// Package dashboard keeps bounded operational metrics and redacted error excerpts
-// for the optional local dashboard. Normal request/response bodies are not retained.
-package dashboard
+// Package metrics keeps bounded operational metrics and redacted error excerpts
+// for terminal monitoring. Normal request/response bodies are not retained.
+package metrics
 
 import (
 	"sync"

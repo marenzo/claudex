@@ -1,0 +1,554 @@
+<div id="claudex-studio" aria-label="Claudex terminal design proposal">
+  <style>
+    #claudex-studio {
+      --cx-bg: light-dark(#f7f6f2, #11131b);
+      --cx-panel: light-dark(#fffefa, #171b26);
+      --cx-raised: light-dark(#eeedf4, #22293a);
+      --cx-text: light-dark(#202636, #ecedf4);
+      --cx-muted: light-dark(#596478, #a3afc3);
+      --cx-line: light-dark(#d5d7e0, #354055);
+      --cx-accent: light-dark(#6149b8, #baa9ff);
+      --cx-cache: light-dark(#11746a, #7bdcc6);
+      --cx-input: light-dark(#566b8a, #a3b8d4);
+      --cx-output: light-dark(#4865b5, #8facf1);
+      --cx-ok: light-dark(#287347, #93d4af);
+      --cx-error: light-dark(#af354f, #f3a0ae);
+      --cx-warn: light-dark(#855a19, #edc98a);
+      color: var(--cx-text);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+      width: 100%;
+    }
+    #claudex-studio[data-theme="night"] { color-scheme: dark; }
+    #claudex-studio[data-theme="paper"] { color-scheme: light; }
+    #claudex-studio * { box-sizing: border-box; }
+    #claudex-studio button, #claudex-studio input, #claudex-studio select {
+      font: inherit; color: inherit;
+    }
+    #claudex-studio button { cursor: pointer; }
+    #claudex-studio button:disabled { cursor: default; color: var(--cx-muted); }
+    #claudex-studio .cx-note { color: var(--cx-muted); margin: 0 0 1em; }
+    #claudex-studio .cx-terminal { background: var(--cx-bg); position: relative; }
+    #claudex-studio .cx-topline {
+      display: flex; justify-content: space-between; gap: 1ch;
+      padding: .6em 2ch; border-bottom: 1px solid var(--cx-line);
+      background: var(--cx-panel); flex-wrap: wrap;
+    }
+    #claudex-studio .cx-brand-small { color: var(--cx-accent); font-weight: 500; }
+    #claudex-studio .cx-dim { color: var(--cx-muted); }
+    #claudex-studio .cx-accent { color: var(--cx-accent); }
+    #claudex-studio .cx-cache { color: var(--cx-cache); }
+    #claudex-studio .cx-error { color: var(--cx-error); }
+    #claudex-studio .cx-warn { color: var(--cx-warn); }
+    #claudex-studio .cx-ok { color: var(--cx-ok); }
+    #claudex-studio .cx-key { color: var(--cx-text); }
+    #claudex-studio .cx-hero {
+      display: grid; grid-template-columns: 1fr auto; align-items: center;
+      gap: 2ch; padding: 1em 2ch; border-bottom: 1px solid var(--cx-line);
+    }
+    #claudex-studio pre { font: inherit; background: none; color: inherit; padding: 0; border: 0; margin: 0; white-space: pre; }
+    #claudex-studio .cx-logo { color: var(--cx-accent); }
+    #claudex-studio .cx-hero-meta { display: grid; grid-template-columns: auto auto; column-gap: 2ch; }
+    #claudex-studio .cx-hero-meta span:nth-child(odd) { color: var(--cx-muted); }
+    #claudex-studio .cx-workspace { display: grid; grid-template-columns: 17ch minmax(0, 1fr); }
+    #claudex-studio .cx-rail {
+      display: flex; flex-direction: column; padding: 1em 1ch;
+      border-right: 1px solid var(--cx-line); background: var(--cx-panel);
+    }
+    #claudex-studio .cx-rail-caption { color: var(--cx-muted); padding: 0 1ch; margin-bottom: .75em; }
+    #claudex-studio .cx-nav-button {
+      display: block; text-align: left; border: 0; background: transparent;
+      color: var(--cx-muted); padding: .5em 1ch; width: 100%; white-space: nowrap;
+    }
+    #claudex-studio .cx-nav-button[aria-current="page"] {
+      color: var(--cx-accent); background: var(--cx-raised);
+      box-shadow: inset 2px 0 var(--cx-accent);
+    }
+    #claudex-studio .cx-nav-button:hover { background: var(--cx-raised); }
+    #claudex-studio .cx-rail-bottom { margin-top: auto; padding: 3em 1ch 0; color: var(--cx-muted); }
+    #claudex-studio .cx-rail-bottom div { margin-top: .75em; }
+    #claudex-studio .cx-main { padding: 1em 2ch; min-width: 0; }
+    #claudex-studio .cx-pagehead {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: .75em 2ch; margin-bottom: 1em;
+    }
+    #claudex-studio .cx-title { font-weight: 500; color: var(--cx-text); }
+    #claudex-studio .cx-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .5em 1ch; }
+    #claudex-studio .cx-quiet {
+      border: 0; background: transparent; padding: .2em .6ch; color: var(--cx-muted);
+    }
+    #claudex-studio .cx-quiet:hover, #claudex-studio .cx-quiet[aria-pressed="true"] { color: var(--cx-accent); background: var(--cx-raised); }
+    #claudex-studio .cx-primary { color: var(--cx-bg); background: var(--cx-accent); border: 1px solid var(--cx-accent); padding: .3em 1ch; }
+    #claudex-studio .cx-secondary { color: var(--cx-text); background: var(--cx-raised); border: 1px solid var(--cx-line); padding: .3em 1ch; }
+    #claudex-studio .cx-stats {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1ch; border-block: 1px solid var(--cx-line); padding: .75em 0; margin-bottom: 1em;
+    }
+    #claudex-studio .cx-stat { padding: 0 1ch; border-left: 1px solid var(--cx-line); }
+    #claudex-studio .cx-stat:first-child { border: 0; padding-left: 0; }
+    #claudex-studio .cx-stat-label { color: var(--cx-muted); }
+    #claudex-studio .cx-stat-value { color: var(--cx-text); font-weight: 500; margin: .35em 0; }
+    #claudex-studio .cx-stat-sub { color: var(--cx-muted); }
+    #claudex-studio .cx-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1em 2ch; }
+    #claudex-studio .cx-pane { min-width: 0; background: var(--cx-panel); border: 1px solid var(--cx-line); border-radius: .3em; padding: .65em 1ch; }
+    #claudex-studio .cx-pane:focus-within { border-color: var(--cx-accent); }
+    #claudex-studio .cx-pane-title { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .3em 1ch; margin-bottom: .5em; font-weight: 500; }
+    #claudex-studio .cx-pane-title small { font: inherit; color: var(--cx-muted); font-weight: 400; }
+    #claudex-studio .cx-span { grid-column: 1 / -1; }
+    #claudex-studio .cx-plot { display: block; padding: 0; border: 0; width: 100%; background: transparent; text-align: left; }
+    #claudex-studio .cx-plot pre { white-space: pre; overflow: hidden; }
+    #claudex-studio .cx-plot .cx-selected-col { background: var(--cx-raised); color: var(--cx-accent); }
+    #claudex-studio .cx-legend { display: flex; gap: .5em 1.5ch; flex-wrap: wrap; margin: .45em 0; color: var(--cx-muted); }
+    #claudex-studio .cx-legend i { font-style: normal; }
+    #claudex-studio .cx-chart-detail { color: var(--cx-muted); min-height: 1.5em; margin-top: .5em; }
+    #claudex-studio .cx-hist-row { display: grid; grid-template-columns: 6ch minmax(0, 1fr) 4ch; gap: .5ch; white-space: nowrap; }
+    #claudex-studio .cx-hist-bar { color: var(--cx-accent); overflow: hidden; }
+    #claudex-studio .cx-right { text-align: right; }
+    #claudex-studio .cx-inline-kv { display: flex; justify-content: space-between; gap: 1ch; flex-wrap: wrap; margin: .4em 0; }
+    #claudex-studio .cx-rule { border: 0; border-top: 1px solid var(--cx-line); margin: .7em 0; }
+    #claudex-studio .cx-mix-row { display: grid; grid-template-columns: 8ch 1fr 4ch; gap: 1ch; }
+    #claudex-studio .cx-meter { white-space: nowrap; color: var(--cx-cache); overflow: hidden; }
+    #claudex-studio .cx-table { width: 100%; border-collapse: collapse; text-align: left; }
+    #claudex-studio .cx-table th { color: var(--cx-muted); font-weight: 400; white-space: nowrap; }
+    #claudex-studio .cx-table th, #claudex-studio .cx-table td { padding: .35em .6ch; border-bottom: 1px solid var(--cx-line); }
+    #claudex-studio .cx-table th:first-child, #claudex-studio .cx-table td:first-child { padding-left: .25ch; }
+    #claudex-studio .cx-table tr:last-child td { border: 0; }
+    #claudex-studio .cx-table .cx-picked { background: var(--cx-raised); box-shadow: inset 2px 0 var(--cx-accent); }
+    #claudex-studio .cx-table tbody tr:hover { background: var(--cx-raised); cursor: pointer; }
+    #claudex-studio .cx-row-button { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; }
+    #claudex-studio .cx-pagination { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1ch; padding-top: .6em; color: var(--cx-muted); }
+    #claudex-studio .cx-foot {
+      padding: .55em 2ch; color: var(--cx-muted); background: var(--cx-panel);
+      border-top: 1px solid var(--cx-line); display: flex; gap: .5em 3ch; justify-content: space-between; flex-wrap: wrap;
+    }
+    #claudex-studio .cx-status { display: flex; flex-wrap: wrap; gap: .35em 2ch; }
+    #claudex-studio .cx-searchbar { display: flex; flex-wrap: wrap; gap: .75em 1ch; margin-bottom: 1em; }
+    #claudex-studio .cx-search { display: flex; align-items: center; border: 1px solid var(--cx-line); background: var(--cx-panel); padding: .35em 1ch; flex: 1 1 20ch; min-width: 0; gap: 1ch; }
+    #claudex-studio .cx-search input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 0; }
+    #claudex-studio select { background: var(--cx-panel); border: 1px solid var(--cx-line); padding: .35em .5ch; max-width: 100%; }
+    #claudex-studio .cx-split { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(28ch, 1fr); gap: 2ch; }
+    #claudex-studio .cx-inline-kv { overflow-wrap: anywhere; }
+    #claudex-studio .cx-detail { min-width: 0; overflow-wrap: anywhere; }
+    #claudex-studio .cx-detail-group { margin: 1em 0; }
+    #claudex-studio .cx-detail-label { color: var(--cx-muted); margin-bottom: .3em; }
+    #claudex-studio .cx-detail-text { background: var(--cx-bg); border-left: 2px solid var(--cx-error); padding: .5em 1ch; margin-top: .5em; }
+    #claudex-studio .cx-timing { margin: .7em 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--cx-muted); }
+    #claudex-studio .cx-token-key { display: inline-block; width: 12ch; color: var(--cx-muted); }
+    #claudex-studio .cx-request-summary { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1em 2ch; margin-bottom: 1em; }
+    #claudex-studio .cx-donut-layout { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 2ch; }
+    #claudex-studio .cx-donut { color: var(--cx-muted); }
+    #claudex-studio .cx-donut-legend { display: grid; gap: .4em; }
+    #claudex-studio .cx-outcome-button { display: flex; justify-content: space-between; gap: 1ch; border: 0; background: transparent; padding: .15em 0; width: 100%; text-align: left; }
+    #claudex-studio .cx-outcome-button:hover { background: var(--cx-raised); }
+    #claudex-studio .cx-allocation { display: flex; margin: .55em 0; min-height: 1.2em; background: var(--cx-raised); }
+    #claudex-studio .cx-allocation span { min-width: 0; }
+    #claudex-studio .cx-explanation { color: var(--cx-muted); margin-top: .5em; }
+    #claudex-studio .cx-models { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1em; }
+    #claudex-studio .cx-form { display: grid; gap: 1em; }
+    #claudex-studio .cx-field { display: grid; grid-template-columns: minmax(15ch, 1fr) minmax(18ch, 1.1fr); gap: .5em 2ch; padding: .5em 0; }
+    #claudex-studio .cx-field label { font-weight: 500; }
+    #claudex-studio .cx-field-note { color: var(--cx-muted); font-weight: 400; margin-top: .3em; }
+    #claudex-studio .cx-field input { background: var(--cx-bg); border: 1px solid var(--cx-line); width: 100%; min-width: 0; padding: .35em .75ch; }
+    #claudex-studio .cx-savebar { display: flex; justify-content: space-between; gap: 1em 2ch; align-items: center; flex-wrap: wrap; }
+    #claudex-studio .cx-overlay { position: absolute; inset: 0; background: color-mix(in srgb, var(--cx-bg) 82%, transparent); z-index: 3; padding: 4em 2ch 2em; display: flex; align-items: flex-start; justify-content: center; }
+    #claudex-studio .cx-dialog { background: var(--cx-panel); border: 1px solid var(--cx-accent); border-radius: .3em; padding: 1em 2ch; width: min(64ch, 100%); }
+    #claudex-studio .cx-dialog-head { display: flex; justify-content: space-between; gap: 1ch; align-items: center; margin-bottom: .75em; }
+    #claudex-studio .cx-command { display: flex; justify-content: space-between; gap: 1ch; width: 100%; text-align: left; background: transparent; border: 0; padding: .55em 1ch; }
+    #claudex-studio .cx-command:hover { background: var(--cx-raised); color: var(--cx-accent); }
+    #claudex-studio .cx-toast { border-left: 2px solid var(--cx-accent); padding: .5em 1ch; background: var(--cx-raised); margin-bottom: .75em; }
+    #claudex-studio .cx-mobile-tabs { display: none; }
+    #claudex-studio .cx-measure { position: absolute; visibility: hidden; pointer-events: none; white-space: pre; }
+    #claudex-studio[data-density="dense"] .cx-table th, #claudex-studio[data-density="dense"] .cx-table td { padding-block: .15em; }
+    #claudex-studio[data-density="dense"] .cx-hero { display: none; }
+    #claudex-studio[data-layout="standard"] .cx-rail,
+    #claudex-studio[data-layout="compact"] .cx-rail,
+    #claudex-studio[data-layout="mini"] .cx-rail { flex-direction: row; flex-wrap: wrap; padding: .4em 1ch; border-right: 0; border-bottom: 1px solid var(--cx-line); gap: .25ch; }
+    #claudex-studio[data-layout="standard"] .cx-rail-caption,
+    #claudex-studio[data-layout="compact"] .cx-rail-caption,
+    #claudex-studio[data-layout="mini"] .cx-rail-caption,
+    #claudex-studio:not([data-layout="wide"]) .cx-rail-bottom { display: none; }
+    #claudex-studio:not([data-layout="wide"]) .cx-workspace { grid-template-columns: minmax(0, 1fr); }
+    #claudex-studio:not([data-layout="wide"]) .cx-nav-button { width: auto; }
+    #claudex-studio:not([data-layout="wide"]) .cx-nav-button[aria-current="page"] { box-shadow: inset 0 -2px var(--cx-accent); }
+    #claudex-studio:not([data-layout="wide"]) .cx-split { grid-template-columns: minmax(0, 1fr); gap: 1em; }
+    #claudex-studio[data-layout="compact"] .cx-hero,
+    #claudex-studio[data-layout="mini"] .cx-hero { display: none; }
+    #claudex-studio[data-layout="compact"] .cx-grid,
+    #claudex-studio[data-layout="mini"] .cx-grid { grid-template-columns: minmax(0, 1fr); }
+    #claudex-studio[data-layout="compact"] .cx-mobile-tabs,
+    #claudex-studio[data-layout="mini"] .cx-mobile-tabs { display: flex; gap: .5ch; margin-bottom: .75em; flex-wrap: wrap; }
+    #claudex-studio[data-layout="compact"] .cx-stats,
+    #claudex-studio[data-layout="mini"] .cx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1em 1ch; }
+    #claudex-studio[data-layout="mini"] .cx-field { grid-template-columns: minmax(0, 1fr); }
+    #claudex-studio[data-layout="compact"] .cx-request-summary,
+    #claudex-studio[data-layout="mini"] .cx-request-summary { grid-template-columns: minmax(0, 1fr); }
+    #claudex-studio[data-layout="mini"] .cx-summary-extra { display: none; }
+    #claudex-studio[data-layout="mini"] .cx-main { padding-inline: 1ch; }
+    #claudex-studio[data-layout="mini"] .cx-hide-mini { display: none; }
+    #claudex-studio[data-layout="mini"] .cx-nav-button { padding-inline: .4ch; }
+    #claudex-studio[data-layout="mini"] .cx-stats .cx-stat:nth-child(even) { padding-left: 1ch; }
+    #claudex-studio .cx-focussed .cx-grid { grid-template-columns: minmax(0, 1fr); }
+    @media (prefers-reduced-motion: no-preference) { #claudex-studio button { transition: background-color 100ms ease, color 100ms ease; } }
+  </style>
+  <div class="cx-note">CLAUDEX / DESIGN STUDY <span aria-hidden="true">·</span> illustrative data</div>
+  <span class="cx-measure" id="cx-measure" aria-hidden="true">0000000000</span>
+  <div class="cx-terminal" id="cx-terminal"></div>
+  <script>
+  (() => {
+    const root = document.getElementById('claudex-studio');
+    const terminal = root.querySelector('#cx-terminal');
+    const measure = root.querySelector('#cx-measure');
+    const design = { theme: 'system', density: 'comfortable', layout: 'adaptive', logo: 'expanded', rows: 40 };
+    const state = { page: 'Requests', minutes: 60, paused: false, selected: 0, model: 'Astra 6', search: '', outcome: '', modelFilter: '', effortFilter: '', sort: 'time', reverse: false, chart: 'activity', bucket: -1, focused: false, modal: '', commandSearch: '', toast: '', showDetail: false, saved: { model: 'gpt-6-astra', effort: 'high', reviewer: 'gpt-6.1-sol', context: 1000000, compact: 900000 } };
+    state.draft = {...state.saved};
+    const models = [ ['Sol 6.1', 'gpt-6.1-sol'], ['Terra 5.6', 'gpt-5.6-terra'], ['Luna 6', 'gpt-6-luna'], ['Astra 6', 'gpt-6-astra'], ['Sol 6', 'gpt-6-sol'] ];
+    const now = new Date('2026-10-22T13:40:30Z').getTime();
+    const started = now - 134 * 60000;
+    const events = [];
+    const history = [];
+    let nextID = 1;
+    for (let minute = 0; minute < 134; minute++) {
+      const time = Math.floor(started / 60000) * 60000 + minute * 60000;
+      const count = minute === 71 || minute === 72 ? 0 : Math.max(1, Math.round(11 + 6 * Math.sin(minute / 6) + 3 * Math.cos(minute / 2.1)));
+      const bucket = {time, records: []};
+      for (let j = 0; j < count; j++) {
+        const id = nextID++;
+        const model = id % 11 === 0 ? models[0] : id % 13 === 0 ? models[1] : id % 7 === 0 ? models[4] : id % 3 === 0 ? models[2] : models[3];
+        const status = id % 79 === 0 ? 429 : id % 113 === 0 ? 502 : id % 61 === 0 ? 499 : 200;
+        const input = 18500 + (id * 1493) % 138000;
+        const output = 600 + (id * 347) % 5700;
+        const usage = status === 200 && id % 19 !== 0;
+        const duration = status === 429 ? 1210 : status === 499 ? 4200 : 1800 + (id * 1571) % 104000;
+        const cached = Math.floor(input * (.52 + (id % 43) / 100));
+        const completed = time + 1000 + Math.floor((j + 1) * 56000 / (count + 1));
+        const record = { id, model: model[0], modelID: model[1], effort: id % 3 === 0 ? 'medium' : 'high', status, input, cached, output, reasoning: Math.floor(output * .57), usage, duration, first: usage && id % 23 !== 0 ? 300 + id * 23 % 4400 : null, time: completed, started: completed - duration };
+        events.push(record); bucket.records.push(record);
+      }
+      history.push(bucket);
+    }
+    // One explicit partial current minute; the remaining minute has not happened.
+    const partial = {time: Math.floor(now / 60000) * 60000, records: []};
+    for (let j = 0; j < 4; j++) {
+      const id = nextID++;
+      const r = {id, model: j === 3 ? 'Sol 6.1' : 'Astra 6', modelID: j === 3 ? 'gpt-6.1-sol' : 'gpt-6-astra', effort: 'high', status: j === 3 ? 429 : 200, input: 86000, cached: 72240, output: 2310, reasoning: 1210, usage: j !== 3, duration: j === 3 ? 1240 : 16400 + j * 850, first: j === 3 ? null : 1280, time: now - (4 - j) * 2500, started: now - (4 - j) * 2500 - 16400};
+      r.started=r.time-r.duration;
+      events.push(r); partial.records.push(r);
+    }
+    history.push(partial);
+    const recent = events.slice(-500).reverse();
+    state.selected = recent.find(r=>r.status===200&&r.usage).id;
+    const logo = [
+      '  ___ _      _   _   _ ___  _____  __',
+      ' / __| |    /_\\ | | | |   \\| __\\ \\/ /',
+      '| (__| |__ / _ \\| |_| | |) | _| >  <',
+      ' \\___|____/_/ \\_\\\\___/|___/|___/_/\\_\\'
+    ].join('\n');
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+    const fmt = n => n == null ? '—' : n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 10000 ? 1 : 0) + 'k' : String(n);
+    const pct = (a,b) => b > 0 ? (100 * a / b).toFixed(1) + '%' : '—';
+    const ms = n => n == null ? '—' : n < 1000 ? n + 'ms' : (n / 1000).toFixed(1) + 's';
+    const clock = t => new Date(t).toISOString().slice(11,16);
+    const fullClock = t => new Date(t).toISOString().slice(11,19);
+    const quantile = (arr,q) => arr.length ? [...arr].sort((a,b)=>a-b)[Math.max(0, Math.ceil(arr.length*q)-1)] : null;
+    const aggregate = rows => rows.reduce((t,r) => {t.count++; t.failed += r.status >= 400 && r.status !== 499 ? 1 : 0; t.canceled += r.status === 499 ? 1 : 0; t.limited += r.status === 429 ? 1 : 0; if (r.usage) { t.coverage++; t.input += r.input; t.cached += r.cached; t.output += r.output; t.reasoning += r.reasoning; } return t;}, {count:0, failed:0, canceled:0, limited:0, coverage:0, input:0, cached:0, output:0, reasoning:0});
+    const lifetime = aggregate(events);
+    const bounds = [1000,5000,15000,30000,60000,120000,300000,Infinity];
+    const binLabels = ['≤ 1s','1–5s','5–15s','15–30s','30–60s','1–2m','2–5m','> 5m'];
+    let columns = 120;
+    let layout = 'wide';
+    const compact = () => layout === 'compact' || layout === 'mini';
+    const historyWindow = () => history.filter(b => b.time >= Math.floor(now/60000)*60000 - (state.minutes-1)*60000);
+    const sampled = () => recent.filter(r => r.time >= Math.floor(now/60000)*60000 - (state.minutes-1)*60000);
+    const dirty = () => JSON.stringify(state.saved) !== JSON.stringify(state.draft);
+    const status = r => r.status === 499 ? '<span class="cx-dim">○ Canceled</span>' : r.status >= 400 ? `<span class="cx-error">× ${r.status===429?'Limited':'Failed'}</span>` : '<span class="cx-ok">✓ OK</span>';
+    const button = (action,text,extra='') => `<button type="button" class="cx-quiet" data-action="${action}" ${extra}>${text}</button>`;
+    const optionList = (items,current) => items.map(([label,value]) => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`).join('');
+    const bar = (n,max,width) => max > 0 && n > 0 ? '█'.repeat(Math.max(1,Math.round(n/max*width))) : '';
+    const field = (label,name,control,note) => `<div class="cx-field"><div><label for="cx-${name}">${label}</label><div class="cx-field-note">${note}</div></div><div>${control}</div></div>`;
+    function shell() {
+      const pages = ['Overview','Requests','Models','Settings'];
+      const defaultName=models.find(m=>m[1]===state.saved.model)?.[0]||state.saved.model;
+      const reviewerName=models.find(m=>m[1]===state.saved.reviewer)?.[0]||'Claude client';
+      const hero = design.logo === 'expanded' && state.page === 'Overview' && design.rows >= 44 ? `<div class="cx-hero"><pre class="cx-logo" role="img" aria-label="Claudex ASCII wordmark">${esc(logo)}</pre><div class="cx-hero-meta"><span>Running for</span><span>2h 14m</span><span>Default model</span><span>${esc(defaultName)} · ${esc(state.saved.effort)}</span><span>Command reviewer</span><span>${esc(reviewerName)} · high</span></div></div>` : '';
+      return `<div id="cx-app"><header class="cx-topline"><span><span class="cx-brand-small">[c/x] CLAUDEX</span><span class="cx-dim cx-hide-mini"> / request monitor</span></span><span class="cx-status"><span class="${state.paused ? 'cx-warn' : 'cx-ok'}">${state.paused ? 'Ⅱ Updates paused' : '● Connected'}</span><span>4 requests running · 3 terminals connected</span><span class="cx-dim cx-hide-mini">127.0.0.1:8317</span></span></header>${hero}<div class="cx-workspace"><nav class="cx-rail" aria-label="Claudex views"><div class="cx-rail-caption">WORKSPACE</div>${pages.map((page,i) => `<button type="button" class="cx-nav-button" data-page="${page}" ${page === state.page ? 'aria-current="page"' : ''}><span class="cx-dim">${i+1}</span> ${page}${page==='Settings' && dirty() ? ' •' : ''}</button>`).join('')}<div class="cx-rail-bottom"><div>Recent history</div><div>Last 500 requests<br>2 hours of charts</div><div>${button('commands','ctrl+k commands')}<br>${button('help','? help')}</div></div></nav><main class="cx-main ${state.focused ? 'cx-focussed' : ''}">${state.toast ? `<div class="cx-toast" role="status">${esc(state.toast)} ${button('dismiss','×','aria-label="Dismiss notice"')}</div>` : ''}${pageContent()}</main></div><footer class="cx-foot"><span>${state.page === 'Requests' ? '<span class="cx-key">↑↓</span> select  <span class="cx-key">Enter</span> inspect  <span class="cx-key">/</span> find' : state.page === 'Settings' ? '<span class="cx-key">Tab</span> field  <span class="cx-key">Ctrl+s</span> save  <span class="cx-key">Esc</span> back' : '<span class="cx-key">Tab</span> focus  <span class="cx-key">Enter</span> inspect  <span class="cx-key">z</span> expand'}</span><span><span class="cx-key">1–4</span> views  <span class="cx-key">Ctrl+k</span> commands  ${button('help','? help')}</span><span class="cx-dim">${columns} cols · ${state.paused ? 'snapshot paused' : 'updated 13:40:30'}</span></footer></div>${modalContent()}`;
+    }
+    function pageHead(title,sub,controls='') {
+      return `<div class="cx-pagehead"><div><div class="cx-title">${title}</div><div class="cx-dim">${sub}</div></div><div class="cx-controls">${controls}</div></div>`;
+    }
+    function timeControls() {
+      return [15,60,120].map(m=>button('range',m===15?'15m':m===60?'1h':'2h',`data-minutes="${m}" aria-pressed="${state.minutes===m}"`)).join('')+button('pause',state.paused?'▶ Resume updates':'Ⅱ Pause updates');
+    }
+    function pane(title,meta,content,classes='') {
+      return `<section class="cx-pane ${classes}"><div class="cx-pane-title"><span>${title}</span><small>${meta}</small></div>${content}</section>`;
+    }
+    function histogram(rows) {
+      const bins = bounds.map(()=>0);
+      rows.forEach(r=>bins[bounds.findIndex(b=>r.duration<=b)]++);
+      const maximum = Math.max(1,...bins);
+      const width = compact() ? Math.max(5,columns-24) : Math.max(5,Math.floor((columns-(layout==='wide'?25:8))*.32)-14);
+      return bins.map((n,i)=>`<div class="cx-hist-row"><span class="cx-dim">${binLabels[i]}</span><span class="cx-hist-bar">${bar(n,maximum,width)}</span><span class="cx-right">${n}</span></div>`).join('');
+    }
+    // The preview plots actual Unicode Braille cells: 2 × 4 dots per cell.
+    // It deliberately uses neither SVG paths nor raster graphs.
+    function braille(data,width,height,maxValue) {
+      const pixelWidth = width*2, pixelHeight = height*4;
+      const cells = Array.from({length:height},()=>Array.from({length:width},()=>({bits:0,color:0})));
+      const bits = [[1,8],[2,16],[4,32],[64,128]];
+      const dot = (x,y,color) => {if(x<0||x>=pixelWidth||y<0||y>=pixelHeight)return;const cell=cells[Math.floor(y/4)][Math.floor(x/2)];cell.bits|=bits[y%4][x%2];cell.color=color;};
+      data.forEach((series,color)=>{
+        for(let x=0;x<pixelWidth;x++){
+          const at=x/(pixelWidth-1)*Math.max(0,series.length-1), index=Math.floor(at), fraction=at-index;
+          const a=series[index]||0, b=series[Math.min(series.length-1,index+1)]||0;
+          const value=a+(b-a)*fraction;
+          const y=Math.max(0,Math.min(pixelHeight-1,Math.round((1-value/maxValue)*(pixelHeight-1))));
+          dot(x,y,color);
+          if(x>0){const before=(x-1)/(pixelWidth-1)*Math.max(0,series.length-1),bi=Math.floor(before),bf=before-bi;const prior=(series[bi]||0)+((series[Math.min(series.length-1,bi+1)]||0)-(series[bi]||0))*bf;const py=Math.round((1-prior/maxValue)*(pixelHeight-1));for(let yy=Math.min(y,py);yy<=Math.max(y,py);yy++)dot(x,yy,color);}
+        }
+      });
+      const colors=['var(--cx-cache)','var(--cx-input)','var(--cx-output)'];
+      return cells.map((row,y)=>`${String(y===0?fmt(maxValue):y===height-1?'0':'').padStart(5)}<span class="cx-dim">│</span>${row.map(c=>`<span style="color:${colors[c.color]}">${c.bits?String.fromCodePoint(0x2800+c.bits):' '}</span>`).join('')}`).join('\n');
+    }
+    function plot(type) {
+      const buckets=historyWindow();
+      const totals=buckets.map(b=>aggregate(b.records));
+      const wideBody=columns-(layout==='wide'?25:8);
+      const width=Math.max(10,compact()||state.focused?wideBody-10:Math.floor(wideBody*.60)-9);
+      const height=design.rows>=44?8:6;
+      let content='';
+      if(type==='tokens'){
+        const series=[totals.map(t=>t.cached),totals.map(t=>t.input-t.cached),totals.map(t=>t.output)];
+        const maxValue=Math.ceil(Math.max(1,...series.flat())/200000)*200000;
+        content=braille(series,width,height,maxValue);
+      }else{
+        const peak=Math.max(1,...totals.map(t=>t.count));
+        const maximum=Math.ceil(peak/5)*5;
+        const columnsData=Array.from({length:width},(_,i)=>totals[Math.min(totals.length-1,Math.floor(i/Math.max(1,width-1)*(totals.length-1)))]);
+        for(let y=height-1;y>=0;y--){
+          content+=`${String(y===height-1?maximum:y===0?'0':'').padStart(5)}<span class="cx-dim">│</span>`;
+          columnsData.forEach((t,x)=>{
+            const scaled=t.count/maximum*height, fraction=Math.max(0,Math.min(1,scaled-y));
+            const glyph=fraction===0?' ':['▁','▂','▃','▄','▅','▆','▇','█'][Math.max(0,Math.ceil(fraction*8)-1)];
+            const selected=state.bucket>=0&&Math.floor(x/width*buckets.length)===state.bucket;
+            // Outcome ticks sit on the baseline; the bar height remains total completions.
+            const color=y===0&&t.failed?'var(--cx-error)':y===0&&t.canceled?'var(--cx-muted)':'var(--cx-cache)';
+            content+=`<span class="${selected?'cx-selected-col':''}" style="color:${color}">${glyph}</span>`;
+          });
+          if(y)content+='\n';
+        }
+      }
+      content+=`\n     <span class="cx-dim">└${'─'.repeat(width)}</span>\n      <span class="cx-dim">${clock(buckets[0].time)}${' '.repeat(Math.max(1,width-10))}${clock(buckets[buckets.length-1].time)}</span>`;
+      const i=state.bucket>=0?Math.min(buckets.length-1,state.bucket):buckets.length-1;
+      const b=buckets[i],t=totals[i];
+      const detail=type==='tokens'?`${clock(b.time)} · cached ${fmt(t.cached)} / uncached ${fmt(t.input-t.cached)} / output ${fmt(t.output)}`:`${clock(b.time)} · ${t.count} completed / ${t.failed} failed / ${t.canceled} canceled`;
+      return `<button type="button" class="cx-plot" data-action="chart" data-chart="${type}" aria-label="${type==='tokens'?'Reported tokens per minute':'Completed requests per minute'}. Arrow keys select a minute; Enter opens recent request detail."><pre role="img" aria-label="${type==='tokens'?'Cached input, uncached input, and output token trends':'Completion activity; red baseline marks failures and gray marks cancellations'}">${content}</pre></button><div class="cx-chart-detail">${esc(detail)} ${button('minute','↗ inspect minute')}</div>`;
+    }
+    function overview() {
+      const h=historyWindow(), t=aggregate(h.flatMap(b=>b.records)), s=sampled();
+      const p95=quantile(s.map(r=>r.duration),.95);
+      const values=[['Completed',t.count.toLocaleString(),`${t.count-t.failed-t.canceled} ok · ${t.canceled} canceled`],['Failed',String(t.failed),`${pct(t.failed,t.count-t.canceled)} cancellations excluded`],['Input from cache',pct(t.cached,t.input),'share of reported input tokens'],['95% of requests within',ms(p95),`${s.length} recent completions`]];
+      const stats=`<div class="cx-stats">${values.map(v=>`<div class="cx-stat"><div class="cx-stat-label">${v[0]}</div><div class="cx-stat-value">${v[1]}</div><div class="cx-stat-sub">${v[2]}</div></div>`).join('')}</div>`;
+      const switcher=compact()?`<div class="cx-mobile-tabs">${[['activity','Activity'],['tokens','Tokens'],['latency','Latency'],['mix','Models']].map(([v,n])=>button('chart-tab',n,`data-chart="${v}" aria-pressed="${state.chart===v}"`)).join('')}</div>`:'';
+      const show = type => !compact()&&!state.focused || state.chart===type;
+      let plots='';
+      if(show('activity'))plots+=pane('Request activity','completions / min',plot('activity')+'<div class="cx-legend"><span><i class="cx-cache">▰</i> total</span><span><i class="cx-error">×</i> failure tick</span><span>○ canceled tick</span><span>current minute in progress</span></div>');
+      if(show('latency'))plots+=pane('Response duration',`${s.length} recent`,histogram(s)+`<hr class="cx-rule"><div class="cx-inline-kv"><span class="cx-dim">Median</span><span>${ms(quantile(s.map(r=>r.duration),.5))}</span><span class="cx-dim">99% within</span><span>${ms(quantile(s.map(r=>r.duration),.99))}</span></div><div class="cx-inline-kv"><span class="cx-dim">First output · median</span><span>${ms(quantile(s.filter(r=>r.first!==null).map(r=>r.first),.5))}</span></div>`);
+      if(show('tokens'))plots+=pane('Token flow','tokens / min',plot('tokens')+'<div class="cx-legend"><span><i class="cx-cache">─</i> cached input</span><span><i style="color:var(--cx-input)">─</i> uncached input</span><span><i style="color:var(--cx-output)">─</i> output</span></div>');
+      if(show('mix')){
+        const counts=models.map(([name])=>[name,s.filter(r=>r.model===name).length]).sort((a,b)=>b[1]-a[1]);
+        plots+=pane('Requests by model',`${s.length} recent`,counts.map(([name,n])=>`<div class="cx-mix-row"><span>${esc(name)}</span><span class="cx-meter">${bar(n,s.length,compact()?18:10)}</span><span class="cx-right">${pct(n,s.length).replace('.0','')}</span></div>`).join('')+`<hr class="cx-rule"><div class="cx-inline-kv"><span class="cx-dim">High / medium effort</span><span>${s.filter(r=>r.effort==='high').length} / ${s.filter(r=>r.effort==='medium').length}</span></div><div class="cx-inline-kv"><span class="cx-dim">Token usage available</span><span>${t.coverage} / ${t.count}</span></div><div class="cx-inline-kv"><span class="cx-dim">Rate limits / recoveries</span><span>${t.limited} / 2 lifetime</span></div><div class="cx-inline-kv"><span class="cx-dim">Input / output</span><span>${fmt(t.input)} / ${fmt(t.output)}</span></div>`);
+      }
+      const rows=recent.slice(0,compact()?3:Math.max(4,Math.min(12,design.rows-35)));
+      const stream=state.focused?'':pane('Recent requests','latest completed requests',requestTable(rows,true),'cx-span');
+      return pageHead('Overview',`Last ${state.minutes===60?'hour':state.minutes===120?'2 hours':'15 minutes'} · minute-by-minute`,timeControls())+stats+switcher+`<div class="cx-grid">${plots}${stream}</div><div class="cx-chart-detail">${fmt(lifetime.count)} lifetime completions · charts cover ${h.length}m · response times and model mix use recent requests · ${button('focus',state.focused?'z restore layout':'z expand plot')}</div>`;
+    }
+    function filtered() {
+      let rows=recent.filter(r=>(!state.modelFilter||r.modelID===state.modelFilter)&&(!state.effortFilter||r.effort===state.effortFilter)&&(!state.outcome||(state.outcome==='error'?r.status>=400&&r.status!==499:state.outcome==='canceled'?r.status===499:state.outcome==='429'?r.status===429:r.status<400))&&(!state.search||(`${r.id} ${r.model} ${r.modelID} ${r.effort} ${r.status} ${r.status===429?'rate limit upstream quota temporarily unavailable':r.status===499?'caller canceled':r.status===502?'transport stream ended unexpectedly':''}`).toLowerCase().includes(state.search.toLowerCase())));
+      if(state.minuteFilter!==undefined)rows=rows.filter(r=>Math.floor(r.time/60000)*60000===state.minuteFilter);
+      rows.sort((a,b)=>state.sort==='duration'?b.duration-a.duration:state.sort==='cache'?(b.usage?b.cached/b.input:-1)-(a.usage?a.cached/a.input:-1):b.id-a.id);
+      if(state.reverse)rows.reverse();
+      return rows;
+    }
+    function requestTable(rows,short=false) {
+      const tiny=layout==='mini';
+      return `<table class="cx-table" aria-label="Completed request records"><thead><tr><th>${button('sort','Time ↓','data-sort="time"')}</th><th>Model</th>${tiny?'':'<th>Result</th>'}<th class="cx-right">${button('sort',tiny?'Dur.':'Duration','data-sort="duration"')}</th>${compact()||short||columns<144?'':'<th class="cx-right">First output</th>'}${tiny?'':`<th class="cx-right">${button('sort','Cache','data-sort="cache"')}</th>`}</tr></thead><tbody>${rows.map(r=>`<tr data-row="${r.id}" class="${state.selected===r.id?'cx-picked':''}"><td><button type="button" class="cx-row-button" data-action="row" data-id="${r.id}" aria-label="Inspect request ${r.id}">${fullClock(r.time)}</button></td><td>${esc(r.model)}${tiny?`<br>${status(r)}`:''}</td>${tiny?'':`<td>${status(r)}</td>`}<td class="cx-right">${ms(r.duration)}</td>${compact()||short||columns<144?'':`<td class="cx-right">${ms(r.first)}</td>`}${tiny?'':`<td class="cx-right">${r.usage?pct(r.cached,r.input):'—'}</td>`}</tr>`).join('')}</tbody></table>${rows.length?'':'<div class="cx-detail-group cx-dim">No recent requests match these filters.</div>'}`;
+    }
+    function donut(parts,center,width=12,height=6) {
+      const total=parts.reduce((sum,p)=>sum+p.value,0);
+      if(!total)return '<div class="cx-dim">No data available</div>';
+      const pixelsW=width*2,pixelsH=height*4;
+      const bits=[[1,8],[2,16],[4,32],[64,128]];
+      const cells=Array.from({length:height},()=>Array.from({length:width},()=>({bits:0,color:'var(--cx-muted)'})));
+      for(let y=0;y<pixelsH;y++)for(let x=0;x<pixelsW;x++){
+        const dx=(x+.5-pixelsW/2)/(pixelsW/2),dy=(y+.5-pixelsH/2)/(pixelsH/2);
+        const radius=Math.hypot(dx,dy);
+        if(radius>.96||radius<.56)continue;
+        const angle=(Math.atan2(dy,dx)+Math.PI/2+Math.PI*2)%(Math.PI*2)/(Math.PI*2);
+        let cumulative=0,index=0;
+        for(;index<parts.length-1;index++){cumulative+=parts[index].value/total;if(angle<cumulative)break;}
+        const cell=cells[Math.floor(y/4)][Math.floor(x/2)];
+        cell.bits|=bits[y%4][x%2];cell.color=parts[index].color;
+      }
+      const label=String(center).slice(0,Math.max(1,width-6));
+      const textStart=Math.floor((width-label.length)/2),middle=Math.floor(height/2);
+      const rows=cells.map((row,y)=>row.map((cell,x)=>y===middle&&x>=textStart&&x<textStart+label.length?esc(label[x-textStart]):`<span style="color:${cell.color}">${cell.bits?String.fromCodePoint(0x2800+cell.bits):' '}</span>`).join(''));
+      return `<pre class="cx-donut" role="img" aria-label="${esc(parts.map(p=>`${p.label}: ${p.value} (${pct(p.value,total)})`).join(', '))}">${rows.join('\n')}</pre>`;
+    }
+    function allocation(parts,total,label) {
+      if(total<=0)return '<div class="cx-dim">Token usage was not reported.</div>';
+      return `<div class="cx-allocation" role="img" aria-label="${esc(label)}">${parts.map(p=>`<span style="width:${p.value/total*100}%;background:${p.color}"></span>`).join('')}</div>`;
+    }
+    function requestSummary(rows) {
+      const all=aggregate(recent),matching=aggregate(rows);
+      const parts=[{label:'Successful',value:all.count-all.failed-all.canceled,color:'var(--cx-ok)',filter:'ok',symbol:'✓'},{label:'Failed',value:all.failed,color:'var(--cx-error)',filter:'error',symbol:'×'},{label:'Canceled',value:all.canceled,color:'var(--cx-muted)',filter:'canceled',symbol:'○'}];
+      const outcome=`<div class="cx-donut-layout">${donut(parts,recent.length)}<div class="cx-donut-legend">${parts.map(p=>`<button type="button" class="cx-outcome-button" data-action="outcome-summary" data-outcome="${p.filter}" aria-pressed="${state.outcome===p.filter}"><span style="color:${p.color}">${p.symbol} ${p.label}</span><span>${p.value} <span class="cx-dim">${pct(p.value,all.count)}</span></span></button>`).join('')}</div></div><div class="cx-explanation">All ${recent.length} recent requests. Choose an outcome to filter.</div>`;
+      const tokenParts=[{label:'Cached input',value:matching.cached,color:'var(--cx-cache)'},{label:'New input',value:matching.input-matching.cached,color:'var(--cx-input)'},{label:'Output',value:matching.output,color:'var(--cx-output)'}];
+      const usage=matching.coverage===0?`<div class="cx-explanation">No token usage was reported for the matching requests.</div><div class="cx-inline-kv"><span class="cx-dim">Median response time</span><span>${ms(quantile(rows.map(r=>r.duration),.5))}</span></div>`:`<div class="cx-inline-kv"><span class="cx-dim">Input from cache</span><span>${pct(matching.cached,matching.input)}</span></div>${allocation(tokenParts,matching.input+matching.output,tokenParts.map(p=>`${p.label} ${fmt(p.value)} tokens`).join(', '))}<div class="cx-legend"><span><i class="cx-cache">■</i> cached ${fmt(matching.cached)}</span><span><i style="color:var(--cx-input)">■</i> new ${fmt(matching.input-matching.cached)}</span><span><i style="color:var(--cx-output)">■</i> output ${fmt(matching.output)}</span></div><div class="cx-inline-kv"><span class="cx-dim">Median response time</span><span>${ms(quantile(rows.map(r=>r.duration),.5))}</span></div><div class="cx-explanation">Matches current filters. Token counts available for ${matching.coverage} of ${matching.count} requests.</div>`;
+      return `<div class="cx-request-summary">${pane('Request outcomes','last 500 requests',outcome)}${pane('Usage & response time',`${rows.length} matching requests`,usage,'cx-summary-extra')}</div>`;
+    }
+    function inspector(r) {
+      if(!r)return '<div class="cx-dim">Select a recent request.</div>';
+      const outcomeLabel=r.status===499?'Canceled after':r.status>=400?'Failed after':'Completed in';
+      const firstPosition=r.first===null?null:Math.max(0,Math.min(20,Math.round(r.first/r.duration*20)));
+      const timing=firstPosition===null?'':`<pre class="cx-timing" role="img" aria-label="First output after ${ms(r.first)}, request ended after ${ms(r.duration)}">├${'─'.repeat(firstPosition)}<span class="cx-accent">●</span>${'─'.repeat(20-firstPosition)}┤</pre>`;
+      let tokenBreakdown='<div class="cx-explanation">The provider did not report token usage for this request.</div>';
+      if(r.usage){
+        const inputParts=[{label:'From cache',value:r.cached,color:'var(--cx-cache)'},{label:'New input',value:r.input-r.cached,color:'var(--cx-input)'}];
+        const outputParts=[{label:'Reasoning',value:r.reasoning,color:'var(--cx-accent)'},{label:'Other output',value:r.output-r.reasoning,color:'var(--cx-output)'}];
+        tokenBreakdown=`<div class="cx-inline-kv"><span>Input tokens</span><span>${r.input.toLocaleString()}</span></div>${allocation(inputParts,r.input,`${pct(r.cached,r.input)} of input came from cache`)}<div class="cx-inline-kv"><span class="cx-cache">■ From cache</span><span>${fmt(r.cached)} · ${pct(r.cached,r.input)}</span></div><div class="cx-inline-kv"><span style="color:var(--cx-input)">■ New input</span><span>${fmt(r.input-r.cached)}</span></div><hr class="cx-rule"><div class="cx-inline-kv"><span>Output tokens</span><span>${r.output.toLocaleString()}</span></div>${allocation(outputParts,r.output,`${r.reasoning} reasoning tokens, ${r.output-r.reasoning} other output tokens`)}<div class="cx-inline-kv"><span class="cx-accent">■ Reasoning</span><span>${fmt(r.reasoning)}</span></div><div class="cx-inline-kv"><span style="color:var(--cx-output)">■ Other output</span><span>${fmt(r.output-r.reasoning)}</span></div><div class="cx-explanation">Each bar shows parts of its total. Reasoning is already included in output.</div>`;
+      }
+      let error='';
+      if(r.status===429)error=`<div class="cx-detail-group"><div class="cx-detail-label">PROVIDER RATE LIMIT · 429</div><span class="cx-error">Too many requests</span><div class="cx-detail-text">The provider asked us to slow down. This request could not complete.</div><div class="cx-chart-detail">Sensitive values removed from this error message</div></div>`;
+      else if(r.status===499)error='<div class="cx-detail-group"><div class="cx-detail-label">REQUEST CANCELED</div>The requesting app disconnected. Cancellations are counted separately from failures.</div>';
+      else if(r.status===502)error='<div class="cx-detail-group"><div class="cx-detail-label">CONNECTION INTERRUPTED</div><div class="cx-detail-text">The connection to the provider closed before the reply finished.</div><div class="cx-chart-detail">Provider status was not available.</div></div>';
+      return `<div class="cx-pane-title"><span>Request #${r.id}</span><span>${status(r)}</span></div><div class="cx-dim">${fullClock(r.started)} → ${fullClock(r.time)}</div><div class="cx-detail-group"><div>${esc(r.model)}</div><div class="cx-dim">${esc(r.effort)} reasoning effort</div></div><div class="cx-detail-label">RESPONSE TIME</div>${timing}<div class="cx-inline-kv"><span class="cx-dim">First output</span><span>${r.first===null?'Not observed':ms(r.first)}</span></div><div class="cx-inline-kv"><span class="cx-dim">${outcomeLabel}</span><span>${ms(r.duration)}</span></div><div class="cx-explanation">First output can be reasoning or tool data before visible text.</div><div class="cx-detail-group"><div class="cx-detail-label">TOKEN BREAKDOWN</div>${tokenBreakdown}</div>${error}<hr class="cx-rule"><div class="cx-dim">Message content and tool arguments are not saved.</div>`;
+    }
+    function requests() {
+      const rows=filtered();
+      if(rows.length&&!rows.some(r=>r.id===state.selected))state.selected=rows[0].id;
+      const index=Math.max(0,rows.findIndex(r=>r.id===state.selected));
+      const limit=compact()?5:Math.max(6,Math.min(24,design.rows-26));
+      const offset=Math.floor(index/limit)*limit;
+      const visible=rows.slice(offset,offset+limit);
+      const detail=rows.find(r=>r.id===state.selected);
+      const search=`<div class="cx-searchbar"><label class="cx-search"><span class="cx-dim">/</span><input id="cx-search" name="requestSearch" value="${esc(state.search)}" placeholder="Find model, status, request…" aria-label="Search recent requests"></label><select name="modelFilter" aria-label="Filter model"><option value="">All models</option>${optionList(models,state.modelFilter)}</select><select name="outcome" aria-label="Filter outcome">${optionList([['All outcomes',''],['Failures','error'],['Canceled','canceled'],['Rate limited','429'],['Successful','ok']],state.outcome)}</select><select name="effortFilter" aria-label="Filter reasoning effort">${optionList([['All efforts',''],['High','high'],['Medium','medium']],state.effortFilter)}</select></div>`;
+      const minute=state.minuteFilter!==undefined?`<div class="cx-toast">Minute ${clock(state.minuteFilter)} · aggregate ${state.minuteTotal} completions · ${rows.length} recent ${button('clear-minute','Clear minute')}</div>`:'';
+      const table=`<section class="cx-pane">${requestTable(visible)}<div class="cx-pagination"><span>${rows.length?offset+1:0}–${offset+visible.length} of ${rows.length} matches · ${recent.length} recent</span><span>${button('prev','↑ previous')}${button('next','↓ next')}</span></div></section>`;
+      const inspectorPane=pane(compact()?'Request detail':'Inspector',compact()?button('back-table','← list'):'selected request',`<div class="cx-detail">${inspector(detail)}</div>`);
+      const summary=compact()&&state.showDetail?'':requestSummary(rows);
+      return pageHead('Requests','Last 500 completed requests · newest first',button('clear','Clear filters'))+minute+search+summary+(compact()?(state.showDetail?inspectorPane:table):`<div class="cx-split">${table}${inspectorPane}</div>`);
+    }
+    function modelsView() {
+      const s=sampled(), chosen=models.find(m=>m[0]===state.model)||models[3];
+      const rows=models.map(([name,id])=>{const all=events.filter(r=>r.model===name),t=aggregate(all),sample=s.filter(r=>r.model===name);return `<tr data-model="${name}" class="${state.model===name?'cx-picked':''}"><td><button type="button" class="cx-row-button" data-action="model" data-model="${name}">${name}</button>${id===state.saved.model?'<span class="cx-accent"> ◇</span>':''}</td><td class="cx-right">${t.count}</td>${layout==='mini'?'':`<td class="cx-right">${pct(t.cached,t.input)}</td><td class="cx-right">${t.failed}</td>`}<td class="cx-right">${ms(quantile(sample.map(r=>r.duration),.95))}</td></tr>`;}).join('');
+      const chosenRows=events.filter(r=>r.model===chosen[0]),t=aggregate(chosenRows),sample=s.filter(r=>r.model===chosen[0]);
+      return pageHead('Models','The five supported models · totals since startup',timeControls())+`<div class="cx-models">${pane('Model comparison','◇ default for new chats',`<table class="cx-table" aria-label="Model performance comparison"><thead><tr><th>Model</th><th class="cx-right">Done</th>${layout==='mini'?'':'<th class="cx-right">Cache</th><th class="cx-right">Failed</th>'}<th class="cx-right">P95*</th></tr></thead><tbody>${rows}</tbody></table><div class="cx-chart-detail">* P95: recent completions within ${state.minutes}m · includes cancellations and failures</div>`)}<div class="cx-grid">${pane(esc(chosen[0]),esc(chosen[1]),`<div class="cx-inline-kv"><span class="cx-dim">Reported input</span><span>${fmt(t.input)}</span></div><div class="cx-inline-kv"><span class="cx-dim">↳ cached input</span><span>${fmt(t.cached)} · ${pct(t.cached,t.input)}</span></div><pre class="cx-cache">${bar(t.cached,t.input,Math.max(12,Math.min(40,columns-24)))}</pre><div class="cx-inline-kv"><span class="cx-dim">Reported output</span><span>${fmt(t.output)}</span></div><div class="cx-inline-kv"><span class="cx-dim">↳ reasoning</span><span>${fmt(t.reasoning)}</span></div><hr class="cx-rule"><div class="cx-inline-kv"><span class="cx-dim">Token usage available</span><span>${t.coverage} / ${t.count}</span></div><div class="cx-inline-kv"><span class="cx-dim">Failure rate</span><span>${pct(t.failed,t.count-t.canceled)}</span></div><div class="cx-chart-detail">Selecting a model shows observed usage. Change the default model in Settings.</div>`)}${pane('Response distribution',`${sample.length} recent / ${state.minutes}m`,histogram(sample)+`<hr class="cx-rule"><div class="cx-inline-kv"><span class="cx-dim">First output · median</span><span>${ms(quantile(sample.filter(r=>r.first!==null).map(r=>r.first),.5))}</span></div>`)}</div></div>`;
+    }
+    function settingsView() {
+      const select=(name,items)=>`<select id="cx-${name}" name="setting-${name}" aria-label="${name}">${optionList(items,state.draft[name])}</select>`;
+      const input=name=>`<input id="cx-${name}" name="setting-${name}" type="number" min="1" value="${state.draft[name]}" aria-label="${name}">`;
+      return pageHead('Settings','Review your changes, then save them together',`<span class="${dirty()?'cx-warn':'cx-dim'}">${dirty()?'● UNSAVED':'✓ saved'}</span>`)+`<div class="cx-form">${pane('Generation','used for new Claude sessions',field('Default model','model',select('model',models),'Used when a Claude request does not choose its own model.')+field('Reasoning effort','effort',select('effort',['low','medium','high','xhigh','max','ultra'].map(v=>[v,v])),'Controls how much reasoning the model does.'))}${pane('Auto-mode review','used for new command reviews',field('Command reviewer','reviewer',select('reviewer',[['Claude client',''],...models]),'Reviews tool approvals in auto mode. Effort is always high.'))}${pane('Conversation size','used for new Claude sessions',field('Context window','context',input('context'),'Maximum conversation size reported to Claude.')+field('Compact at','compact',input('compact'),'Claude starts shortening the conversation near this limit.'))}<div class="cx-savebar"><span class="cx-dim">${dirty()?'Your unsaved changes stay here while you explore.':'Requests already running keep their current settings.'}</span><div class="cx-controls"><button type="button" class="cx-secondary" data-action="discard" ${dirty()?'':'disabled'}>Discard</button><button type="button" class="cx-primary" data-action="save" ${dirty()?'':'disabled'}>Save · Ctrl+s</button></div></div>${pane('Connection & files','read only',`<div class="cx-inline-kv"><span class="cx-dim">Listen</span><span>127.0.0.1:8317</span></div><div class="cx-inline-kv"><span class="cx-dim">Credential file</span><span>~/.config/claudex/auth.json</span></div><div class="cx-inline-kv"><span class="cx-dim">Client key file</span><span>~/.config/claudex/client-key</span></div><div class="cx-chart-detail">These are file locations, not their contents. Edit the configuration file and restart to change them.</div><hr class="cx-rule"><div class="cx-dim">History is kept in memory: 500 requests and 2 hours of charts.<br>History clears when the gateway restarts. Message content is not saved.</div>`)}</div>`;
+    }
+    function pageContent() { return state.page==='Requests'?requests():state.page==='Models'?modelsView():state.page==='Settings'?settingsView():overview(); }
+    const commandItems=[['Overview','View gateway activity','1'],['Requests','Inspect recent requests','2'],['Models','Compare model performance','3'],['Settings','Edit gateway settings','4'],['Pause','Pause or resume snapshot','p'],['Focus','Expand the selected chart','z'],['Clear','Clear request filters','x'],['Help','Open keyboard help','?']];
+    function modalContent() {
+      if(!state.modal)return '';
+      let content='';
+      if(state.modal==='commands')content=`<label class="cx-search"><span class="cx-accent">›</span><input name="commandSearch" id="cx-commandSearch" value="${esc(state.commandSearch)}" placeholder="Type a command…" aria-label="Filter commands"></label><div id="cx-commands">${commandItems.filter(c=>(c[0]+' '+c[1]).toLowerCase().includes(state.commandSearch.toLowerCase())).map(c=>`<button type="button" class="cx-command" data-command="${c[0]}"><span>${c[1]}</span><span class="cx-dim">${c[2]}</span></button>`).join('')}</div>`;
+      else if(state.modal==='help')content=`<div class="cx-detail-group">${[['1–4','Switch view'],['Tab / Shift+Tab','Move pane or field focus'],['↑↓ / j k','Move through request rows'],['←→','Inspect chart minutes'],['Enter','Open selected detail'],['/','Search recent requests'],['w','15m / 1h / 2h'],['p','Pause / resume snapshots'],['z','Expand / restore a chart'],['Ctrl+k / :','Command palette'],['Ctrl+s','Save settings draft'],['Esc','Close overlay / return to list'],['q','Quit; review unsaved draft first']].map(([k,v])=>`<div class="cx-inline-kv"><span class="cx-accent">${k}</span><span>${v}</span></div>`).join('')}</div><hr class="cx-rule"><div class="cx-dim">Mouse selection and keyboard navigation address the same panes. Unknown values display —.</div>`;
+      else content=`<div class="cx-detail-group">There are unsaved settings. Keep editing or discard this draft.</div><div class="cx-controls"><button type="button" class="cx-primary" data-action="close">Keep editing</button><button type="button" class="cx-secondary" data-action="discard-close">Discard draft</button></div>`;
+      return `<div class="cx-overlay"><section class="cx-dialog" role="dialog" aria-modal="true" aria-label="${state.modal==='commands'?'Command palette':state.modal==='help'?'Keyboard help':'Unsaved settings'}"><div class="cx-dialog-head"><span class="cx-title">${state.modal==='commands'?'Commands':state.modal==='help'?'Keyboard map':'Unsaved draft'}</span>${button('close','Esc ×','aria-label="Close dialog"')}</div>${content}</section></div>`;
+    }
+    function render() {
+      const active=document.activeElement, name=root.contains(active)?active.name:'', start=active?.selectionStart, end=active?.selectionEnd;
+      const charWidth=measure.getBoundingClientRect().width/10 || 8.4;
+      columns=Math.max(24,Math.floor(root.getBoundingClientRect().width/charWidth));
+      layout=columns>=120&&design.rows>=36?'wide':columns>=96&&design.rows>=28?'standard':columns>=60?'compact':'mini';
+      if(design.layout==='focus'&&layout!=='mini')layout='compact';
+      root.dataset.theme=design.theme; root.dataset.density=design.density; root.dataset.layout=layout;
+      terminal.innerHTML=shell();
+      const app=root.querySelector('#cx-app');
+      app.inert=Boolean(state.modal);
+      if(name){const target=root.querySelector(`[name="${name}"]`);if(target){target.focus({preventScroll:true});if(typeof start==='number'&&target.type==='text')target.setSelectionRange(start,end);}}
+    }
+    function notify(message){state.toast=message;}
+    function setPage(page){state.page=page;state.showDetail=false;state.toast='';state.modal='';render();}
+    function moveRow(delta){const rows=filtered();if(!rows.length)return;const at=rows.findIndex(r=>r.id===state.selected);state.selected=rows[Math.max(0,Math.min(rows.length-1,at+delta))].id;render();}
+    function save(){if(!(Number(state.draft.compact)>0&&Number(state.draft.context)>Number(state.draft.compact))){notify('Compact at must be positive and below the context window.');render();return;}state.saved={...state.draft};notify('Saved in this design preview. No gateway configuration was changed.');render();}
+    root.addEventListener('click',e=>{
+      const page=e.target.closest('[data-page]');if(page){setPage(page.dataset.page);return;}
+      const row=e.target.closest('[data-row]');if(row){state.selected=Number(row.dataset.row);state.showDetail=true;if(state.page==='Overview')state.page='Requests';render();return;}
+      const model=e.target.closest('[data-model]');if(model){state.model=model.dataset.model;render();return;}
+      const command=e.target.closest('[data-command]');if(command){const c=command.dataset.command;state.modal='';if(['Overview','Requests','Models','Settings'].includes(c)){setPage(c);return;}if(c==='Pause')state.paused=!state.paused;if(c==='Focus'){state.page='Overview';state.focused=!state.focused;}if(c==='Clear'){state.search='';state.outcome='';state.modelFilter='';state.effortFilter='';delete state.minuteFilter;}if(c==='Help')state.modal='help';render();return;}
+      const target=e.target.closest('[data-action]');if(!target)return;
+      switch(target.dataset.action){
+        case 'range':state.minutes=Number(target.dataset.minutes);state.bucket=-1;break;
+        case 'pause':state.paused=!state.paused;break;
+        case 'commands':state.modal='commands';break;
+        case 'help':state.modal='help';break;
+        case 'close':state.modal='';break;
+        case 'dismiss':state.toast='';break;
+        case 'chart':{state.chart=target.dataset.chart;const rect=target.getBoundingClientRect();state.bucket=Math.max(0,Math.min(historyWindow().length-1,Math.floor((e.clientX-rect.left)/rect.width*historyWindow().length)));break;}
+        case 'chart-tab':state.chart=target.dataset.chart;break;
+        case 'focus':state.focused=!state.focused;break;
+        case 'minute':{const buckets=historyWindow(),b=buckets[state.bucket>=0?Math.min(buckets.length-1,state.bucket):buckets.length-1];state.minuteFilter=b.time;state.minuteTotal=b.records.length;state.page='Requests';state.showDetail=false;break;}
+        case 'clear-minute':delete state.minuteFilter;break;
+        case 'outcome-summary':state.outcome=state.outcome===target.dataset.outcome?'':target.dataset.outcome;state.selected=0;break;
+        case 'clear':state.search='';state.outcome='';state.modelFilter='';state.effortFilter='';delete state.minuteFilter;break;
+        case 'prev':moveRow(-1);return;
+        case 'next':moveRow(1);return;
+        case 'sort':if(state.sort===target.dataset.sort)state.reverse=!state.reverse;else{state.sort=target.dataset.sort;state.reverse=false;}break;
+        case 'back-table':state.showDetail=false;break;
+        case 'discard-close':state.modal='';state.draft={...state.saved};break;
+        case 'discard':state.draft={...state.saved};notify('Draft discarded.');break;
+        case 'save':save();return;
+      }
+      render();
+      if(state.modal==='commands')root.querySelector('#cx-commandSearch')?.focus({preventScroll:true});
+      else if(state.modal)root.querySelector('.cx-dialog button')?.focus({preventScroll:true});
+    });
+    root.addEventListener('input',e=>{
+      if(e.target.name==='requestSearch'){state.search=e.target.value;state.selected=0;render();}
+      if(e.target.name==='commandSearch'){state.commandSearch=e.target.value;render();}
+      if(e.target.name.startsWith('setting-')&&e.target.type==='number'){state.draft[e.target.name.slice(8)]=Number(e.target.value);render();}
+    });
+    root.addEventListener('change',e=>{
+      if(['outcome','modelFilter','effortFilter'].includes(e.target.name)){state[e.target.name]=e.target.value;state.selected=0;render();}
+      if(e.target.name.startsWith('setting-')){const key=e.target.name.slice(8);state.draft[key]=e.target.type==='number'?Number(e.target.value):e.target.value;render();}
+    });
+    root.addEventListener('keydown',e=>{
+      const editing=['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName);
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&state.page==='Settings'){e.preventDefault();save();return;}
+      if(e.key==='Escape'){e.preventDefault();if(state.modal)state.modal='';else state.showDetail=false;render();return;}
+      if(editing)return;
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'||e.key===':'){e.preventDefault();state.modal='commands';render();root.querySelector('#cx-commandSearch')?.focus({preventScroll:true});return;}
+      if(state.modal)return;
+      if(['1','2','3','4'].includes(e.key)){e.preventDefault();setPage(['Overview','Requests','Models','Settings'][Number(e.key)-1]);return;}
+      if(e.key==='?'){e.preventDefault();state.modal='help';render();return;}
+      if(e.key==='p'){state.paused=!state.paused;render();return;}
+      if(e.key==='w'){state.minutes=state.minutes===15?60:state.minutes===60?120:15;state.bucket=-1;render();return;}
+      if(e.key==='z'){state.page='Overview';state.focused=!state.focused;render();return;}
+      if(e.key==='/'){e.preventDefault();state.page='Requests';render();root.querySelector('#cx-search')?.focus({preventScroll:true});return;}
+      if(state.page==='Requests'&&['ArrowDown','j','ArrowUp','k'].includes(e.key)){e.preventDefault();moveRow(e.key==='ArrowDown'||e.key==='j'?1:-1);return;}
+      if(state.page==='Requests'&&e.key==='Enter'){e.preventDefault();state.showDetail=true;render();return;}
+      if(e.target.closest('[data-action="chart"]')&&['ArrowLeft','ArrowRight','Enter'].includes(e.key)){
+        e.preventDefault();const buckets=historyWindow();
+        if(e.key==='Enter'){const b=buckets[state.bucket>=0?state.bucket:buckets.length-1];state.minuteFilter=b.time;state.minuteTotal=b.records.length;state.page='Requests';}
+        else state.bucket=Math.max(0,Math.min(buckets.length-1,(state.bucket<0?buckets.length-1:state.bucket)+(e.key==='ArrowRight'?1:-1)));
+        const chart=state.chart;render();if(state.page==='Overview')root.querySelector(`[data-chart="${chart}"][data-action="chart"]`)?.focus({preventScroll:true});return;
+      }
+      if(e.key==='q'){if(dirty())state.modal='unsaved';else notify('This is a design preview. In the terminal, q restores your shell.');render();}
+    });
+    render();
+    let lastWidth=root.getBoundingClientRect().width;
+    new ResizeObserver(entries=>{const width=entries[0].contentRect.width;if(Math.abs(width-lastWidth)>1){lastWidth=width;render();}}).observe(root);
+    if(globalThis.Tweak){
+      const tweak=new Tweak({container:root,onChange:render});
+      tweak.addSelect(design,'theme',{label:'Theme',options:[{label:'Follow terminal',value:'system'},{label:'Midnight',value:'night'},{label:'Paper',value:'paper'}]});
+      tweak.addSelect(design,'density',{label:'Density',options:[{label:'Comfortable',value:'comfortable'},{label:'Dense',value:'dense'}]});
+      tweak.addSelect(design,'layout',{label:'Layout',options:[{label:'Adaptive workspace',value:'adaptive'},{label:'Focused view',value:'focus'}]});
+      tweak.addSelect(design,'logo',{label:'Wordmark',options:[{label:'Expanded on overview',value:'expanded'},{label:'Compact identity',value:'compact'}]});
+      tweak.addSlider(design,'rows',{label:'Terminal height',min:24,max:56,step:4,unit:'rows'});
+    }
+  })();
+  </script>
+</div>

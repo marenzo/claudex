@@ -5,87 +5,104 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/marenzo/claudex/internal/auth"
+	"github.com/marenzo/claudex/internal/config"
+	"github.com/marenzo/claudex/internal/control"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
-
-	"github.com/marenzo/claudex/internal/config"
+	"time"
 )
 
-// Launcher starts the installed Claude Code CLI against the local gateway.
-type Launcher struct {
-	Service  *Service
-	LookPath func(string) (string, error)
-	Environ  func() []string
-	Exec     func(path string, argv, env []string) error
-}
+func LogPath(path string) string { return filepath.Join(path+".runtime", "gateway.log") }
 
-// NewLauncher returns a launcher that replaces the current process with claude.
-func NewLauncher(s *Service) *Launcher {
-	return &Launcher{Service: s, LookPath: exec.LookPath, Environ: os.Environ, Exec: syscall.Exec}
-}
-
-// stripped are inherited variables that would override or conflict with the gateway.
-var stripped = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
-	"ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
-	"CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_MANTLE"}
-
-// Run rewrites arguments, ensures the service is running, and executes claude.
-func (l *Launcher) Run(args []string) error {
-	claude, err := l.LookPath("claude")
-	if err != nil {
-		native := filepath.Join(l.Service.Paths.Home, ".local", "bin", "claude")
-		if info, errStat := os.Stat(native); errStat == nil && info.Mode().Perm()&0o111 != 0 {
-			claude = native
+// Ensure starts at most one worker, without registering any operating-system service.
+func Ensure(ctx context.Context, path string, c *control.Client) (control.Status, error) {
+	var status control.Status
+	err := config.WithLock(ctx, path+".startup", func() error {
+		var err error
+		status, err = c.Status(ctx)
+		if err == nil {
+			return nil
 		}
+		if !errors.Is(err, syscall.ECONNREFUSED) {
+			return fmt.Errorf("cannot reuse gateway: %w", err)
+		}
+		cfg, err := config.Load(path)
+		if err != nil {
+			return err
+		}
+		if _, err := auth.NewStore(cfg.AuthFile).Check(); err != nil {
+			return err
+		}
+		binary, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command(binary, "ctl", "run", "--config", path)
+		cmd.Env = append(os.Environ(), "CLAUDEX_SESSION_WORKER=1")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+		if err != nil {
+			return err
+		}
+		defer null.Close()
+		cmd.Stdin = null
+		cmd.Stdout = null
+		cmd.Stderr = null
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		deadline := time.NewTimer(15 * time.Second)
+		defer deadline.Stop()
+		ticker := time.NewTicker(75 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				_ = cmd.Process.Kill()
+				return ctx.Err()
+			case <-deadline.C:
+				_ = cmd.Process.Kill()
+				return errors.New("gateway startup timed out; check claudex ctl logs")
+			case err := <-done:
+				return fmt.Errorf("gateway exited during startup (%v); check claudex ctl logs", err)
+			case <-ticker.C:
+				status, err = c.Status(ctx)
+				if err == nil {
+					return nil
+				}
+				if !errors.Is(err, syscall.ECONNREFUSED) {
+					return err
+				}
+			}
+		}
+	})
+	return status, err
+}
+
+func ClaudePath() (string, error) {
+	if path, err := exec.LookPath("claude"); err == nil {
+		return path, nil
 	}
-	if claude == "" {
-		return errors.New("install Claude Code first and put its claude executable on PATH")
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, ".local", "bin", "claude")
+	if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0111 != 0 {
+		return path, nil
 	}
-	args = RewriteArgs(args)
-	if nativeClaudeCommand(args) {
-		return l.Exec(claude, append([]string{claude}, args...), l.Environ())
-	}
-	p := l.Service.Paths
-	if goos != "darwin" {
-		return errors.New("the Claude launcher uses the macOS service; on this platform start claudex ctl run and connect Claude Code using the documented environment")
-	}
-	cfg, err := config.Load(p.ConfigFile())
-	if err != nil {
-		return fmt.Errorf("cannot read gateway settings at %s; run claudex ctl setup: %w", p.ConfigFile(), err)
-	}
-	if !exists(p.ServicePlist()) {
-		return errors.New("the macOS service is not installed; run claudex ctl setup")
-	}
-	settings, err := Settings(cfg)
-	if err != nil {
-		return err
-	}
-	settingsJSON, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
-	quiet := *l.Service
-	quiet.Out = io.Discard
-	if _, err := quiet.Start(cfg); err != nil {
-		return err
-	}
-	control, err := quiet.ReadControl(context.Background(), cfg)
-	if err != nil {
-		return err
-	}
-	if control.Revision != cfg.Revision() {
-		return errors.New("gateway settings differ from the config; run claudex ctl restart")
-	}
-	key, err := os.ReadFile(cfg.ClientKeyFile)
-	if err != nil {
-		return err
-	}
+	return "", errors.New("install Claude Code and put claude on PATH")
+}
+
+var stripped = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_MANTLE"}
+
+func Environment(settings ClaudeSettings, address, key string) []string {
 	env := map[string]string{}
-	for _, entry := range l.Environ() {
+	for _, entry := range os.Environ() {
 		if name, value, ok := strings.Cut(entry, "="); ok {
 			env[name] = value
 		}
@@ -96,26 +113,84 @@ func (l *Launcher) Run(args []string) error {
 	for name, value := range settings.Env {
 		env[name] = value
 	}
-	env["ANTHROPIC_AUTH_TOKEN"] = strings.TrimSpace(string(key))
-	environ := make([]string, 0, len(env))
+	env["ANTHROPIC_BASE_URL"] = address
+	env["ANTHROPIC_AUTH_TOKEN"] = key
+	out := make([]string, 0, len(env))
 	for name, value := range env {
-		environ = append(environ, name+"="+value)
+		out = append(out, name+"="+value)
 	}
-	argv := append([]string{claude, "--disallowedTools", "Artifact", "--settings", string(settingsJSON)}, args...)
-	return l.Exec(claude, argv, environ)
+	return out
 }
 
-// These Claude commands manage its own installation or local state. They work
-// even when Claudex has not been configured or its gateway is unavailable.
-func nativeClaudeCommand(args []string) bool {
+var ErrAttach = errors.New("gateway attachment failed")
+
+// Run keeps the native CLI on the same terminal and retains the gateway session
+// until the CLI exits. Terminal interrupts already reach the child process group.
+func Run(claude string, args []string, cfg config.Config, c *control.Client) error {
+	settings, err := Settings(cfg)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	lost, err := c.Attach(ctx, "claude")
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrAttach, err)
+	}
+	cmd := exec.Command(claude, append([]string{"--disallowedTools", "Artifact", "--settings", string(data)}, RewriteArgs(args)...)...)
+	cmd.Env = Environment(settings, c.URL, c.Key)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	signals := make(chan os.Signal, 8)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(signals)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	for {
+		select {
+		case err := <-done:
+			return err
+		case sig := <-signals:
+			if sig != os.Interrupt {
+				_ = cmd.Process.Signal(sig)
+			}
+		case <-lost:
+			// Keep the CLI alive; an external persistent gateway can restart. Reattach
+			// ownership when it returns, while leaving Claude's retries in charge.
+			lost = nil
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(time.Second):
+						if next, e := c.Attach(ctx, "claude"); e == nil {
+							select {
+							case <-next:
+							case <-ctx.Done():
+								return
+							}
+						}
+					}
+				}
+			}()
+		}
+	}
+}
+func NativeCommand(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
-	if len(args) == 1 {
-		switch args[0] {
-		case "--help", "-h", "--version", "-v":
-			return true
-		}
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "--version" || args[0] == "-v") {
+		return true
 	}
 	switch args[0] {
 	case "auth", "doctor", "gateway", "import", "install", "logs", "mcp", "plugin", "plugins", "project", "rm", "setup-token", "stop", "kill", "update", "upgrade":

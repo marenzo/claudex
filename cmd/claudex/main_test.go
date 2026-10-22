@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,9 +17,9 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 		{[]string{"setup", "extra"}, "usage: claudex ctl setup"},
 		{[]string{"config", "extra", "more", "args"}, "usage: claudex ctl config"},
 		{[]string{"logs", "extra"}, "usage: claudex ctl logs"},
-		{[]string{"stop", "extra"}, "usage: claudex ctl stop"},
+		{[]string{"stop", "extra"}, "unknown control command"},
 		{[]string{"--version", "extra"}, "usage: claudex ctl --version"},
-		{[]string{"uninstall", "extra"}, "usage: claudex ctl uninstall"},
+		{[]string{"uninstall", "extra"}, "unknown control command"},
 		{[]string{"--bogus"}, "usage: claudex ctl ["},
 	} {
 		err := command(test.args)
@@ -39,12 +38,14 @@ func TestHelpIsNotAnError(t *testing.T) {
 	}
 }
 
-func TestOverviewAcceptsItsFlagsFirst(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "config.json")
-	for _, args := range [][]string{{"--config", missing}, {"-verbose", "--config", missing}, {"--json", "--config=" + missing}} {
-		var misuse usageError
-		if err := command(args); errors.As(err, &misuse) {
-			t.Errorf("%q: rejected as usage error: %v", args, err)
+func TestTUIConnectionFlagsAreDispatched(t *testing.T) {
+	if interactive() {
+		t.Skip("requires a noninteractive test runner")
+	}
+	for _, args := range [][]string{{"--config", "/missing"}, {"--url", "http://127.0.0.1:8317", "--key-file", "/missing"}} {
+		err := command(args)
+		if err == nil || !strings.Contains(err.Error(), "TUI needs a terminal") {
+			t.Fatalf("flags not routed to TUI: %v", err)
 		}
 	}
 }

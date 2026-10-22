@@ -70,7 +70,7 @@ func TestOverloadBeforeAndAfterOutput(t *testing.T) {
 				}
 				return upstreamResponse(tc.upstreamHTTP, body), nil
 			})
-			s.EnableDashboard()
+
 			w := request(s, "/v1/messages", fmt.Sprintf(`{"messages":[],"stream":%t}`, tc.stream))
 			if tc.partial {
 				if w.Code != 200 || !strings.Contains(w.Body.String(), "event: error") || strings.Contains(w.Body.String(), "event: message_stop") {

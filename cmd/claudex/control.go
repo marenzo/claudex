@@ -3,111 +3,106 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/marenzo/claudex/internal/config"
+	"github.com/marenzo/claudex/internal/control"
+	"github.com/marenzo/claudex/internal/launcher"
+	"github.com/marenzo/claudex/internal/tui"
 	"os"
 	"os/exec"
-
-	"github.com/marenzo/claudex/internal/config"
-	"github.com/marenzo/claudex/internal/launcher"
+	"path/filepath"
 )
 
-func cmdOverview(args []string) error {
-	set := flag.NewFlagSet("ctl", flag.ContinueOnError)
-	verbose := set.Bool("verbose", false, "Show every installation check")
-	jsonOutput := set.Bool("json", false, "Print structured status")
-	path := set.String("config", config.DefaultPath(), "Path to the local JSON config")
-	if err := parseFlags(set, args, "usage: claudex ctl [--verbose|--json] [--config PATH]"); err != nil {
+func connectionFlags(set *flag.FlagSet) (*string, *string, *string) {
+	return set.String("config", config.DefaultPath(), "Configuration path"), set.String("url", "", "Gateway URL instead of local config"), set.String("key-file", "", "Client key file for --url")
+}
+func connect(path, address, key string) (*control.Client, error) {
+	if address != "" {
+		if key == "" {
+			return nil, usageError{"--url requires --key-file"}
+		}
+		return control.New(address, key)
+	}
+	if key != "" {
+		return nil, usageError{"--key-file requires --url"}
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	return control.New("http://"+cfg.Listen, cfg.ClientKeyFile)
+}
+func cmdTUI(args []string, settings bool) error {
+	name := "ctl"
+	if settings {
+		name = "ctl config"
+	}
+	set := flag.NewFlagSet(name, flag.ContinueOnError)
+	path, address, key := connectionFlags(set)
+	if err := parseFlags(set, args, "usage: claudex "+name+" [--config PATH | --url URL --key-file PATH]"); err != nil {
 		return err
 	}
-	paths, err := launcher.DefaultPaths()
+	if !interactive() {
+		return usageError{"the TUI needs a terminal; use claudex ctl status --json"}
+	}
+	c, err := connect(*path, *address, *key)
 	if err != nil {
 		return err
 	}
-	checks := launcher.NewStatus(paths, *path).Run()
-	cfg, cfgErr := config.Load(*path)
-	if cfgErr == nil {
-		for _, check := range checks {
-			if check.Name != "gateway" || check.Level != launcher.LevelOK {
-				continue
-			}
-			state, err := launcher.NewService(paths).ReadControl(context.Background(), cfg)
-			if err != nil {
-				checks = append(checks, launcher.Check{Level: launcher.LevelFail, Name: "gateway control", Detail: err.Error()})
-			} else if state.Revision != cfg.Revision() {
-				checks = append(checks, launcher.Check{Level: launcher.LevelFail, Name: "gateway settings", Detail: "running gateway differs from config; run claudex ctl restart"})
-			}
-			break
-		}
+	ctx, cancel := signalContext()
+	defer cancel()
+	return tui.Run(ctx, c, settings)
+}
+func cmdStatus(args []string) error {
+	set := flag.NewFlagSet("status", flag.ContinueOnError)
+	path, address, key := connectionFlags(set)
+	asJSON := set.Bool("json", false, "Print JSON")
+	if err := parseFlags(set, args, "usage: claudex ctl status [--json] [--config PATH | --url URL --key-file PATH]"); err != nil {
+		return err
 	}
-	failed := false
-	for _, check := range checks {
-		failed = failed || check.Level == launcher.LevelFail
+	c, err := connect(*path, *address, *key)
+	if err != nil {
+		return err
 	}
-	if *jsonOutput {
-		out := map[string]any{"version": buildVersion(), "checks": checks}
-		if cfgErr == nil {
-			out["preferences"] = preferences(cfg)
-		}
+	s, err := c.Status(context.Background())
+	if err != nil {
+		return fmt.Errorf("gateway unavailable: %w; run claudex or claudex ctl run", err)
+	}
+	if *asJSON {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(out); err != nil {
-			return err
-		}
-	} else if *verbose {
-		fmt.Printf("Claudex %s\n", buildVersion())
-		launcher.PrintChecks(os.Stdout, checks)
-	} else {
-		fmt.Printf("Claudex %s\n", buildVersion())
-		for _, check := range checks {
-			if check.Name == "gateway" || check.Name == "codex sign-in" || check.Level == launcher.LevelFail {
-				fmt.Printf("%-14s %s\n", check.Name, check.Detail)
-			}
-		}
-		if cfgErr == nil {
-			printPreferences(cfg)
-		}
-		fmt.Println("Actions: config · setup · logs · restart")
+		return encoder.Encode(s)
 	}
-	if failed {
-		return errors.New("one or more checks failed")
-	}
+	fmt.Printf("Claudex %s · %s\n%s · %d clients · %d active\nModel %s · effort %s · reviewer %s\n", s.Version, c.URL, s.Mode, s.Clients, s.Active, s.Preferences.Model, s.Preferences.Effort, s.Preferences.Reviewer)
 	return nil
 }
-
-func reviewerName(cfg config.Config) string {
-	if cfg.AutoModeClassifierModel == "" {
-		return "Claude client"
-	}
-	return cfg.AutoModeClassifierModel + " (experimental)"
-}
-
 func cmdLogs(args []string) error {
 	set := flag.NewFlagSet("logs", flag.ContinueOnError)
-	follow := set.Bool("follow", false, "Follow the gateway log")
-	set.BoolVar(follow, "f", false, "Follow the gateway log")
-	lines := set.Int("lines", 50, "Number of recent lines")
-	if err := parseFlags(set, args, "usage: claudex ctl logs [--follow] [--lines N]"); err != nil {
+	path := set.String("config", config.DefaultPath(), "Configuration path")
+	follow := set.Bool("follow", false, "Follow log rotation")
+	lines := set.Int("lines", 50, "Recent lines")
+	if err := parseFlags(set, args, "usage: claudex ctl logs [--config PATH] [--follow] [--lines N]"); err != nil {
 		return err
 	}
 	if *lines < 1 || *lines > 10000 {
-		return usageError{"--lines must be between 1 and 10000"}
+		return usageError{"--lines must be 1..10000"}
 	}
-	paths, err := launcher.DefaultPaths()
+	absolute, err := filepath.Abs(*path)
 	if err != nil {
 		return err
 	}
-	path := paths.LogFile()
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("gateway log unavailable at %s: %w", path, err)
+	log := launcher.LogPath(absolute)
+	if _, err := os.Stat(log); err != nil {
+		return fmt.Errorf("gateway log unavailable: %w", err)
 	}
-	arg := "-n"
-	cmdArgs := []string{arg, fmt.Sprint(*lines)}
+	argv := []string{"-n", fmt.Sprint(*lines)}
 	if *follow {
-		cmdArgs = append(cmdArgs, "-F")
+		argv = append(argv, "-F")
 	}
-	cmd := exec.Command("/usr/bin/tail", append(cmdArgs, path)...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	argv = append(argv, log)
+	cmd := exec.Command("tail", argv...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

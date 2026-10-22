@@ -27,7 +27,7 @@ func TestConfigValidation(t *testing.T) {
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","listen":"[::1%lo0]:8317"}`, false},
 		{`{"auth_file":"relative","client_key_file":"/tmp/k"}`, false},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","compact_window":1000000}`, false},
-		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","dashboard":true}`, true},
+		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k","dashboard":true}`, false},
 		{`{"auth_file":"/tmp/a","client_key_file":"/tmp/k"} {}`, false},
 	} {
 		p := filepath.Join(t.TempDir(), "config.json")
@@ -41,15 +41,11 @@ func TestConfigValidation(t *testing.T) {
 	}
 }
 
-func TestRevisionIgnoresDashboardOverride(t *testing.T) {
+func TestRevisionChangesWithPreferences(t *testing.T) {
 	cfg := DefaultsFor("/fixture")
-	withDashboard := cfg
-	withDashboard.Dashboard = true
-	if cfg.Revision() != withDashboard.Revision() {
-		t.Error("dashboard changed the revision")
-	}
+	old := cfg.Revision()
 	cfg.Model = "gpt-6.1-sol"
-	if cfg.Revision() == withDashboard.Revision() {
-		t.Error("model did not change the revision")
+	if old == cfg.Revision() {
+		t.Fatal("model did not change revision")
 	}
 }

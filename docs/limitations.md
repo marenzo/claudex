@@ -61,25 +61,22 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   not individual credential files.
 - **Local trust boundary.** HTTP has no built-in TLS. Loopback binding and the
   client key protect the local endpoint. The `-listen` override is for controlled
-  setups such as Docker. Dashboard error excerpts can contain text echoed by the
-  upstream server; see [dashboard privacy](dashboard.md#privacy-and-retention).
-  launchd does not rotate the service log, so manage its size on long-running hosts.
-- **Platform support.** The managed `claudex` launcher and `ctl start`, `stop`,
-  `restart`, and `uninstall` are macOS only. Linux uses `claudex ctl run` or Docker. Releases target Linux and macOS on
-  amd64 and arm64. Windows is not packaged. macOS binaries are not signed or
-  notarized.
+  setups such as Docker. TUI error excerpts can contain text echoed by the
+  upstream server; see [dashboard privacy](tui.md#privacy-and-retention).
+  Gateway logs rotate at 2 MiB with three older files.
+- **Platform support.** The launcher, foreground gateway, and TUI run on Linux and
+  macOS. Releases target amd64 and arm64. Windows is not packaged. macOS binaries
+  are not signed or notarized.
 
 ## Troubleshooting
 
-**Start with `claudex ctl`.** It checks the config, client key, Codex sign-in,
-gateway, macOS service, and Claude Code without changing anything. Fix the first
-`fail` line before trying anything else. See
-[checking an installation](running.md#check-an-installation).
+**Start with `claudex ctl status`.** It queries the authenticated gateway.
+Use `claudex ctl` for live metrics and settings, or `ctl status --json` in scripts.
+If nothing is running, launch `claudex` or `claudex ctl run`.
 
 **Invalid client key.** Claude Code sent a missing or wrong client key. The gateway
 logs `request rejected` with `reason` `invalid_client_key`. Use the value in
-`client_key_file`, never a Codex token. On macOS, start a new `claudex` session.
-Otherwise check `ANTHROPIC_AUTH_TOKEN`.
+`client_key_file`, never a Codex token. Start a new `claudex` session. If connecting manually, check `ANTHROPIC_AUTH_TOKEN`.
 
 **A model is unavailable or rate-limited.** Check `claudex ctl` and pick
 a model your account can use. All requests share one subscription. You may need to
@@ -98,7 +95,7 @@ free for the browser callback.
 
 **Codex sign-in could not be used or refreshed.** The sign-in exists, but the
 gateway could not use it or refresh it. Retry once. If the error continues, run
-`claudex ctl setup --login`. Client messages contain no file paths. The service log records
+`claudex ctl setup --login`. Client messages contain no file paths. The gateway log records
 the underlying error.
 
 **The Codex sign-in switched to a different account.** A refresh during the request
@@ -123,13 +120,5 @@ The dashboard shows request duration and usage, but it does not label compaction
 requests. The default compaction window is 900,000 tokens. You can lower it; see
 [compaction window](configuration.md#compaction-window).
 
-**Dashboard returns 404.** Run `claudex ctl config dashboard on` for the macOS
-service, or start a foreground gateway with `claudex ctl run -dashboard`. Sign in with the
-key in `client_key_file`, not with the Codex sign-in. The page cannot fetch the key
-for you.
-
-**The service fails to start.** Read `~/.local/share/claudex/logs/service.log`.
-A startup error is a plain-text `claudex:` line. JSON lines come from a gateway
-that was already serving. Check whether another process already owns the
-configured port. Logs omit raw conversation bodies and credentials. Before sharing
-a log publicly, check it for local paths and other environment details.
+**TUI cannot connect.** Run `claudex ctl status` and check the address/client key.
+Start `claudex` or `claudex ctl run` first. Use `ctl status --json` without a terminal.

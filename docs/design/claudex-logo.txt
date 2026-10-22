@@ -1,0 +1,11 @@
+  ___ _      _   _   _ ___  _____  __
+ / __| |    /_\ | | | |   \| __\ \/ /
+| (__| |__ / _ \| |_| | |) | _| >  <
+ \___|____/_/ \_\\___/|___/|___/_/\_\
+
+Compact: [c/x] CLAUDEX
+
+The wordmark is plain ASCII. The compact gateway mark preserves the C/X
+identity when a four-row wordmark would take space from operational data.
+Color is optional: lavender for CLAUDE, mint for X. Preserve the letterforms
+when color is unavailable. Never stretch letters or animate the wordmark.

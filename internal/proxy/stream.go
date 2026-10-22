@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 	"github.com/marenzo/claudex/internal/tokens"
 	claude "github.com/marenzo/claudex/internal/translator/codex/claude"
 	"github.com/tidwall/gjson"
@@ -69,7 +69,7 @@ func readEvents(ctx context.Context, body io.Reader, events chan<- streamEvent) 
 	}
 }
 
-func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *dashboard.Request, inputTokens func() (int64, error), review *safeguardReview) int {
+func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *metrics.Request, inputTokens func() (int64, error), review *safeguardReview) int {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	events := make(chan streamEvent, 1)
@@ -141,7 +141,7 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			"meaningful_output", sawOutputDelta, "client_canceled", r.Context().Err() != nil)
 		e := &apiError{Status: 502, Type: "api_error", Message: message + " (" + kind + ")"}
 		if err != nil {
-			e.Details = &dashboard.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", err), Message: err.Error()}
+			e.Details = &metrics.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", err), Message: err.Error()}
 		}
 		return fail(e)
 	}
@@ -264,7 +264,7 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			}
 			if usage := e.Get("response.usage"); usage.Get("input_tokens").Type == gjson.Number && usage.Get("output_tokens").Type == gjson.Number {
 				record.UsageReported = true
-				record.Usage = dashboard.Usage{Input: max(0, usage.Get("input_tokens").Int()), Cached: max(0, usage.Get("input_tokens_details.cached_tokens").Int()), Output: max(0, usage.Get("output_tokens").Int()), Reasoning: max(0, usage.Get("output_tokens_details.reasoning_tokens").Int())}
+				record.Usage = metrics.Usage{Input: max(0, usage.Get("input_tokens").Int()), Cached: max(0, usage.Get("input_tokens_details.cached_tokens").Int()), Output: max(0, usage.Get("output_tokens").Int()), Reasoning: max(0, usage.Get("output_tokens_details.reasoning_tokens").Int())}
 			}
 			if kind == "error" || kind == "response.failed" {
 				return fail(parseUpstreamError(200, event.data, time.Now()))
@@ -312,7 +312,7 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 					case "max_output_tokens", "content_filter":
 					default:
 						return fail(&apiError{Status: 502, Type: "api_error", Message: "Codex terminated with an incomplete response",
-							Details: &dashboard.ErrorDetails{Source: "upstream", Status: 200, Type: kind, Code: reason}})
+							Details: &metrics.ErrorDetails{Source: "upstream", Status: 200, Type: kind, Code: reason}})
 					}
 				}
 				event.data = hydrateOutput(event.data, items, fallback)

@@ -1,14 +1,14 @@
 # Development and releases
 
-Use Go 1.26+ to build. Node.js 24+ runs the dashboard JavaScript checks in
-`make check`. The gateway has three direct Go dependencies and no frontend package
-manager or web framework. The binary embeds the dashboard and a pinned Apache
-ECharts distribution, so no CDN is contacted.
+Use Go 1.27.3 or newer. Bubble Tea v2, Lip Gloss v2, and Bubbles v2 are pinned
+Go dependencies. The binary includes the launcher, TUI, and gateway. No browser
+assets, frontend package manager, Node installation, or separate TUI installation
+is needed.
 
 ```sh
-make check                         # Go tests, dashboard JS syntax/tests, vet, gofmt check
-make lint                          # staticcheck and govulncheck; needs network
-make test-dashboard                # only dashboard syntax and built-in Node tests
+make check                         # Go race tests, vet, gofmt check
+make lint                          # gitleaks, staticcheck, and govulncheck; needs network
+make secrets                       # only the gitleaks scan of every commit
 make build                         # dist/claudex
 ./dist/claudex ctl --version
 make package                       # archive for this OS/architecture in dist/
@@ -18,19 +18,22 @@ Cross-build with `GOOS=linux GOARCH=arm64 make build`. Output always goes to
 `dist/claudex`. Override `VERSION`, `COMMIT`, or `BUILD_DATE` for a reproducible
 build stamp. The binary does not depend on the source checkout at runtime.
 
-`make lint` runs staticcheck v0.8.1 and govulncheck v1.8.0. It downloads the pinned
-tools, so it needs network access. Override `STATICCHECK_VERSION` or
-`GOVULNCHECK_VERSION` to use another version.
+`make lint` runs gitleaks v8.30.1, staticcheck v0.8.2, and govulncheck v1.8.0. It
+downloads the pinned tools, so it needs network access. Override
+`GITLEAKS_VERSION`, `STATICCHECK_VERSION`, or `GOVULNCHECK_VERSION` to use another
+version. gitleaks scans every commit reachable from the checkout, so CI fetches
+full history. Give fake credentials in tests a `fixture-` prefix;
+`.gitleaks.toml` allows only values that start with it.
 
-Node runs only JavaScript syntax checks and the built-in test runner. `make build`,
-Docker builds, and running Claudex do not need it. There is no npm install or
-frontend build step. See [the dashboard notes](dashboard.md) for metric
-definitions, frontend structure, and vendor provenance.
+`make install` copies the built binary to `$(PREFIX)/bin` (default `~/.local/bin`).
+It does not run setup or register a service. The optional Homebrew formula is
+HEAD-only and runs the same foreground command through `brew services`.
+See [the TUI guide](tui.md) for metric definitions and interface behavior.
 
 ## Tests
 
-Tests use local fixtures. They must not require a live subscription, an installed
-service, an existing build, or user credentials. Opt-in integration tests are
+Tests use local fixtures. They must not require a live subscription, a running
+gateway, an existing build, or user credentials. Opt-in integration tests are
 separate.
 
 The live Codex integration test sits behind the `live` build tag. Give it a copy of

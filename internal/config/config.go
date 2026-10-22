@@ -19,10 +19,12 @@ type Config struct {
 	ContextWindow           int    `json:"context_window"`
 	CompactWindow           int    `json:"compact_window"`
 	AutoModeClassifierModel string `json:"auto_mode_classifier_model,omitempty"`
-	Dashboard               bool   `json:"dashboard"`
 }
 
 func DefaultPath() string {
+	if path := os.Getenv("CLAUDEX_CONFIG"); path != "" {
+		return path
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "claudex", "config.json")
 }

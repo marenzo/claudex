@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/marenzo/claudex/internal/config"
-	"github.com/marenzo/claudex/internal/dashboard"
+	"github.com/marenzo/claudex/internal/metrics"
 	translatorcommon "github.com/marenzo/claudex/internal/translator/common"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -85,6 +85,7 @@ type toolVerdict struct {
 }
 
 type safeguardReview struct {
+	model     string
 	id        string
 	session   string
 	payload   map[string]json.RawMessage
@@ -156,7 +157,7 @@ func newSafeguardReview(raw []byte, cfg config.Config) (*safeguardReview, error)
 		return nil, errors.New("truncated classifier context cannot be reviewed safely")
 	}
 	digest := sha256.Sum256(raw)
-	r := &safeguardReview{id: fmt.Sprintf("%x", digest[:8]), payload: map[string]json.RawMessage{"classifier_context": json.RawMessage(ctx.Raw)}, open: make(map[int64]*reviewedTool), arguments: make(map[int64]*strings.Builder)}
+	r := &safeguardReview{model: cfg.AutoModeClassifierModel, id: fmt.Sprintf("%x", digest[:8]), payload: map[string]json.RawMessage{"classifier_context": json.RawMessage(ctx.Raw)}, open: make(map[int64]*reviewedTool), arguments: make(map[int64]*strings.Builder)}
 	// The subscription backend derives cache affinity from Session_id. Isolate
 	// reviews from generation, while keeping a stable identity across reviews in
 	// this Claude session. Metadata-free clients fall back to workspace affinity.
@@ -326,11 +327,11 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 	callerContext := ctx
 	ctx, cancel := context.WithTimeout(ctx, classifierTimeout)
 	defer cancel()
-	model, ok := config.FindModel(s.Config.AutoModeClassifierModel)
+	model, ok := config.FindModel(review.model)
 	if !ok {
 		return nil, errors.New("invalid classifier model")
 	}
-	record := dashboard.Request{Started: time.Now(), Model: model.ID, Effort: classifierReasoningEffort, Status: 502, ErrorKind: "classifier"}
+	record := metrics.Request{Started: time.Now(), Model: model.ID, Effort: classifierReasoningEffort, Status: 502, ErrorKind: "classifier"}
 	if s.metrics != nil {
 		s.metrics.Begin()
 	}
@@ -459,7 +460,7 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 				}
 				if usage := e.Get("response.usage"); usage.Get("input_tokens").Type == gjson.Number && usage.Get("output_tokens").Type == gjson.Number {
 					record.UsageReported = true
-					record.Usage = dashboard.Usage{Input: max(0, usage.Get("input_tokens").Int()), Cached: max(0, usage.Get("input_tokens_details.cached_tokens").Int()), Output: max(0, usage.Get("output_tokens").Int()), Reasoning: max(0, usage.Get("output_tokens_details.reasoning_tokens").Int())}
+					record.Usage = metrics.Usage{Input: max(0, usage.Get("input_tokens").Int()), Cached: max(0, usage.Get("input_tokens_details.cached_tokens").Int()), Output: max(0, usage.Get("output_tokens").Int()), Reasoning: max(0, usage.Get("output_tokens_details.reasoning_tokens").Int())}
 				}
 				verdicts, err := parseVerdicts([]byte(text.String()), review.calls)
 				if err == nil {
