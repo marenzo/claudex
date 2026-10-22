@@ -42,7 +42,7 @@ func prepareRequest(raw []byte, cfg config.Config) ([]byte, string, error) {
 	}
 	model, ok := config.FindModel(requestedModel)
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported model %q; choose gpt-6-astra, gpt-6.1-sol, gpt-6-sol, gpt-6-luna, or an explicitly pinned GPT-5.6 model", requestedModel)
+		return nil, "", fmt.Errorf("unsupported model %q; choose gpt-6.1-sol, gpt-5.6-terra, gpt-6-luna, gpt-6-astra, or gpt-6-sol", requestedModel)
 	}
 	if strings.EqualFold(root.Get("tool_choice.name").String(), "Artifact") {
 		return nil, "", fmt.Errorf("publishing through Artifact is disabled; use local file tools")

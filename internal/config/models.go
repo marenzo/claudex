@@ -18,13 +18,11 @@ func Models() []Model {
 	levels := []string{"low", "medium", "high", "xhigh", "max"}
 	withNone := []string{"none", "low", "medium", "high", "xhigh", "max"}
 	return []Model{
-		{"gpt-6-astra", "GPT-6 Astra", "astra", levels, "xhigh"},
 		{"gpt-6.1-sol", "GPT-6.1 Sol", "sol", levels, "xhigh"},
-		{"gpt-6-sol", "GPT-6 Sol", "sol6", withNone, "max"},
-		{"gpt-6-luna", "GPT-6 Luna", "luna", withNone, "max"},
-		{"gpt-5.6-sol", "GPT-5.6 Sol", "sol5.6", withNone, "max"},
 		{"gpt-5.6-terra", "GPT-5.6 Terra", "terra", withNone, "max"},
-		{"gpt-5.6-luna", "GPT-5.6 Luna", "luna5.6", withNone, "max"},
+		{"gpt-6-luna", "GPT-6 Luna", "luna", withNone, "max"},
+		{"gpt-6-astra", "GPT-6 Astra", "astra", levels, "xhigh"},
+		{"gpt-6-sol", "GPT-6 Sol", "sol6", withNone, "max"},
 	}
 }
 

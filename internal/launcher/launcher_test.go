@@ -170,6 +170,35 @@ func TestRewriteArgsPreservesClaudeArguments(t *testing.T) {
 	}
 }
 
+func TestPickerReplacesBuiltInsWithOnlyAgreedModels(t *testing.T) {
+	settings, err := Settings(config.DefaultsFor("/fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-astra", "gpt-6-sol"}
+	if !settings.ModelPicker.ReplaceBuiltInOptions || !reflect.DeepEqual(settings.AvailableModels, want) {
+		t.Fatalf("picker does not replace and restrict built-ins: %+v", settings.ModelPicker)
+	}
+	var got []string
+	for _, option := range settings.ModelPicker.Options {
+		got = append(got, option.Model)
+		if option.Label == "" || option.Description == "" {
+			t.Fatal("unlabeled model row")
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("picker model IDs: %v", got)
+	}
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]json.RawMessage
+	if json.Unmarshal(raw, &decoded) != nil || decoded["availableModels"] == nil || decoded["modelPicker"] == nil {
+		t.Fatal("Claude Code picker settings missing from launcher JSON")
+	}
+}
+
 func TestSettingsSelectClassifierLocation(t *testing.T) {
 	cfg := config.DefaultsFor("/fixture")
 	settings, err := Settings(cfg)

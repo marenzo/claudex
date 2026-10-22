@@ -20,21 +20,21 @@ func TestModelAliases(t *testing.T) {
 			}
 		})
 	}
-	for _, input := range []string{"unknown", "other-sonnet", "claude-sonnetty", "gpt-7"} {
+	for _, input := range []string{"unknown", "other-sonnet", "claude-sonnetty", "gpt-7", "gpt-5.6-sol", "sol5.6", "gpt-5.6-luna", "luna5.6", "gpt-image-2.5"} {
 		if _, ok := FindModel(input); ok {
 			t.Fatalf("accepted %s", input)
 		}
 	}
 }
 
-func TestPinnedModelsRemainSelectable(t *testing.T) {
-	for _, id := range []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+func TestAgreedModelsRemainSelectable(t *testing.T) {
+	for _, id := range []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-terra"} {
 		got, ok := FindModel(id)
 		if !ok || got.ID != id {
 			t.Fatalf("pin %s resolved to %+v", id, got)
 		}
 	}
-	for alias, id := range map[string]string{"sol6": "gpt-6-sol", "sol5.6": "gpt-5.6-sol", "luna5.6": "gpt-5.6-luna"} {
+	for alias, id := range map[string]string{"sol6": "gpt-6-sol"} {
 		got, ok := FindModel(alias)
 		if !ok || got.ID != id {
 			t.Fatalf("alias %s resolved to %+v", alias, got)

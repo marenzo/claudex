@@ -11,12 +11,25 @@ import (
 
 // ClaudeSettings is derived from config and passed inline with --settings.
 type ClaudeSettings struct {
-	Env         map[string]string `json:"env"`
-	Model       string            `json:"model"`
-	EffortLevel string            `json:"effortLevel"`
-	Permissions struct {
+	Env             map[string]string `json:"env"`
+	Model           string            `json:"model"`
+	EffortLevel     string            `json:"effortLevel"`
+	AvailableModels []string          `json:"availableModels"`
+	ModelPicker     ClaudeModelPicker `json:"modelPicker"`
+	Permissions     struct {
 		Deny []string `json:"deny"`
 	} `json:"permissions"`
+}
+
+type ClaudeModelPicker struct {
+	ReplaceBuiltInOptions bool                `json:"replaceBuiltInOptions"`
+	Options               []ClaudeModelOption `json:"options"`
+}
+
+type ClaudeModelOption struct {
+	Model       string `json:"model"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
 }
 
 // Families maps Claude model families to the GPT model that serves them.
@@ -57,6 +70,18 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 		env["ANTHROPIC_DEFAULT_"+family+"_MODEL_NAME"] = target.Name + suffix
 	}
 	settings := ClaudeSettings{Env: env, Model: model.ID, EffortLevel: cfg.ReasoningEffort}
+	// Gateway discovery adds rows to Claude's built-in lineup. Replace it to
+	// avoid image models, unsupported versions and duplicate family/custom rows.
+	// These settings apply only to Claude instances launched through Claudex.
+	settings.ModelPicker.ReplaceBuiltInOptions = true
+	for _, option := range config.Models() {
+		settings.AvailableModels = append(settings.AvailableModels, option.ID)
+		description := "Codex subscription; --model " + option.Alias
+		if option.Alias == "sol6" {
+			description = "Previous Sol version; " + description
+		}
+		settings.ModelPicker.Options = append(settings.ModelPicker.Options, ClaudeModelOption{Model: option.ID, Label: option.Name, Description: description})
+	}
 	if cfg.ReasoningEffort == "ultra" {
 		settings.EffortLevel = "ultracode"
 	}

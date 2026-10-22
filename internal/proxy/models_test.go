@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -44,8 +45,12 @@ func TestModelDiscovery(t *testing.T) {
 			t.Fatal(w.Code)
 		}
 		if want == "" {
-			if gjson.Get(w.Body.String(), "data.#").Int() != 7 {
-				t.Fatal(w.Body)
+			var ids []string
+			for _, model := range gjson.Get(w.Body.String(), "data").Array() {
+				ids = append(ids, model.Get("id").String())
+			}
+			if !reflect.DeepEqual(ids, []string{"gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-astra", "gpt-6-sol"}) {
+				t.Fatalf("unexpected selectable models: %v", ids)
 			}
 		} else if gjson.Get(w.Body.String(), "id").String() != want {
 			t.Fatal(w.Body)
@@ -55,6 +60,12 @@ func TestModelDiscovery(t *testing.T) {
 		w := request(s, "/v1/messages/count_tokens", fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"hello"}]}`, model))
 		if w.Code != 200 || gjson.Get(w.Body.String(), "input_tokens").Int() <= 0 {
 			t.Fatal(w.Code, w.Body)
+		}
+	}
+	for _, model := range []string{"gpt-5.6-sol", "gpt-5.6-luna", "gpt-image-2.5"} {
+		w := request(s, "/v1/messages", fmt.Sprintf(`{"model":%q,"messages":[]}`, model))
+		if w.Code != 400 {
+			t.Fatalf("unsupported model %s: HTTP %d", model, w.Code)
 		}
 	}
 }

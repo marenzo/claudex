@@ -22,7 +22,7 @@ unchanged into a native installation.
 | Field | Accepted values |
 | --- | --- |
 | `listen` | A loopback IP literal and a port from 1 to 65535, such as `127.0.0.1:8317` |
-| `model` | `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, or an alias or Claude family name listed below |
+| `model` | `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna`, `gpt-6-astra`, `gpt-6-sol`, or an alias or Claude family name listed below |
 | `reasoning_effort` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
 | `context_window` | A positive integer |
 | `compact_window` | A positive integer below `context_window` |
@@ -38,12 +38,17 @@ loaded value to the canonical model ID.
 | `sol6`, `sonnet` | `gpt-6-sol` |
 | `sol`, `opus` | `gpt-6.1-sol` |
 | `luna`, `haiku` | `gpt-6-luna` |
-| `sol5.6` | `gpt-5.6-sol` |
 | `terra` | `gpt-5.6-terra` |
-| `luna5.6` | `gpt-5.6-luna` |
 
-Pinned GPT-5.6 IDs remain selectable; the family defaults now use the newer models.
-No GPT-6 Terra is listed by upstream Codex; Sonnet moves to GPT-6 Sol.
+The model picker contains only these five models, plus Claude Code's Default row
+(which resolves to the configured model). Claudex replaces Claude Code's built-in
+lineup, so image models, other versions, and duplicate gateway/family rows are
+hidden. This applies only to Claude Code launched through `claudex`; ordinary
+Claude Code settings are unchanged. Restart the Claude Code process to reload the
+launcher settings; a gateway restart alone cannot update an open picker.
+
+Terra remains GPT-5.6 Terra; there is no GPT-6 Terra in the verified catalog.
+GPT-6 Sol is the only older model retained.
 
 A family name also matches `claude-<family>` and `claude-<family>-<version>`, such
 as `claude-opus-4-7`.
