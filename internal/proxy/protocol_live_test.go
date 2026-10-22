@@ -50,6 +50,46 @@ func liveProtocolServer(t *testing.T) (*Server, auth.Credential) {
 	return s, credential
 }
 
+// Only classifier requests are sent; proposed fixture commands never execute.
+// New call IDs should preserve history reuse. Changed permissions must produce
+// a fresh authorization decision even when that exact policy prefix is cached.
+func TestLiveClassifierPrefixCache(t *testing.T) {
+	s, credential := liveProtocolServer(t)
+	s.EnableDashboard()
+	raw, _ := sjson.SetBytes([]byte(reviewRequest(false)), "messages.0.content", "Read /fixture/src.rs for review. Do not write it.\n"+strings.Repeat("Synthetic source context: the fixture is read-only and has no external side effects.\n", 1800))
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": fmt.Sprintf("cache_fixture_%d", i-1), "name": "Read", "input": map[string]any{"file_path": "/fixture/src.rs"}}}})
+			raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": fmt.Sprintf("cache_fixture_%d", i-1), "content": "Synthetic fixture source"}}})
+			raw, _ = sjson.SetBytes(raw, "messages.-1", map[string]any{"role": "user", "content": fmt.Sprintf("Continue fixture review, step %d.", i)})
+		}
+		want := "not_flagged"
+		if i == 2 {
+			raw, _ = sjson.SetBytes(raw, "safeguards.0.classifier_context.rules.deny", []string{"Read(/fixture/src.rs)"})
+			want = "flagged"
+		}
+		review, err := newSafeguardReview(raw, s.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id := fmt.Sprintf("cache_fixture_%d", i)
+		review.calls = []reviewedTool{{ID: id, Name: "Read", Input: json.RawMessage(`{"file_path":"/fixture/src.rs"}`)}}
+		verdicts, err := s.classifyTools(context.Background(), review, credential.AccountID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if verdicts[id].Outcome != want {
+			t.Fatalf("step %d: got %s, want %s", i, verdicts[id].Outcome, want)
+		}
+		recent := s.metrics.Snapshot().Recent
+		usage := recent[0].Usage
+		t.Logf("step=%d input=%d cached=%d outcome=%s", i, usage.Input, usage.Cached, verdicts[id].Outcome)
+		if i == 1 && usage.Cached < 1024 {
+			t.Error("unchanged historical prefix was not cached")
+		}
+	}
+}
+
 // The model proposes a report tool call. No tool or shell command is executed.
 func TestLiveInlineHandbackThroughGateway(t *testing.T) {
 	s, _ := liveProtocolServer(t)
