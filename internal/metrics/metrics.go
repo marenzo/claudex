@@ -56,6 +56,7 @@ type Request struct {
 	ErrorKind             string            `json:"error_kind,omitempty"` // A static category, never a raw error message.
 	Error                 *ErrorDetails     `json:"error,omitempty"`
 	DurationMS            int64             `json:"duration_ms"`
+	UpstreamAttempts      int               `json:"upstream_attempts,omitempty"`
 	UpstreamFirstOutputMS *int64            `json:"upstream_first_output_ms,omitempty"`
 	ClientFirstOutputMS   *int64            `json:"client_first_output_ms,omitempty"`
 	ReviewMS              *int64            `json:"review_ms,omitempty"`

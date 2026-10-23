@@ -59,6 +59,46 @@ claudex ctl status --json
 claudex ctl logs --follow
 ```
 
+## Upstream recovery
+
+Recognized upstream transport failures receive at most one retry after a
+randomized 250–499 ms delay. Eligible failures include transport timeouts,
+connection resets, premature EOF and selected HTTP/2 stream or connection errors.
+There is no separate retry setting.
+
+Generation retries only before any message event reaches Claude Code;
+keep-alive pings can continue across attempts. Partial text, reasoning and tool
+buffers from the failed attempt are discarded. Once a message has started, an
+interruption is reported without replaying it. HTTP errors and malformed responses
+are reported directly. The TUI request inspector shows **Upstream attempts** for
+retried calls. Auto Mode reviews have their own recovery within the existing
+review deadline; see [Auto Mode](auto-mode.md#execution-and-failure-handling).
+Token totals retain any usage reported by an interrupted attempt; usage that the
+upstream never reports cannot be counted.
+
+The boundary includes an empty `message_start`, not just visible text. This
+prevents duplicate text, reasoning or client tool calls. A ping alone keeps the
+connection alive without committing the message. If recovery fails after pings
+have started a streamed reply, the failure is sent as an SSE error event; the
+retained request records the effective failure status.
+
+Logs record `upstream retry` with the call's trace, role, reason category and next
+attempt number. A recovered call completes successfully with
+`upstream_attempts: 2`; the failed attempt is not an additional completed request.
+An interrupted stream log has `retrying: true` when the gateway will attempt
+recovery. Inspect the final `messages` record to determine the generation outcome.
+Sign-in refresh after an HTTP 401 is handled separately by the credential store.
+
+## Updating an existing gateway
+
+After updating a binary, restart its running gateway and reopen the TUI to load
+the new build. `claudex ctl --version` identifies the CLI binary;
+`claudex ctl status --json` identifies the running gateway. An existing process
+continues using the binary it loaded until restarted. Foreground gateways stop on
+Ctrl-C; Homebrew gateways use `brew services restart`; automatic gateways exit
+after their attached clients disconnect and active requests finish.
+Ctrl-C or SIGTERM gives active requests up to 30 seconds to finish during shutdown.
+
 ## Homebrew
 
 The repository is also a Homebrew tap using an explicit remote URL. Its HEAD-only

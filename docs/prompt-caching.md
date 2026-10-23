@@ -71,6 +71,12 @@ fingerprint checks the entire previous last-user boundary, including histories
 longer than 256 messages. A matching local prefix or boundary shows that Claudex
 preserved evidence; it does not prove upstream cache reuse.
 
+Concurrent workers can share session metadata while using different histories.
+The local comparison uses the most recent review in its group, which may belong
+to another worker. A changed prefix or unmatched previous boundary can therefore
+coexist with an upstream cache hit from an older matching history. Use reported
+cached-input counts to establish actual reuse.
+
 ## When reuse changes
 
 A new session identity, model change, compaction, or an altered system prompt,

@@ -79,15 +79,56 @@ timeout, account changes and interrupted classification fail the response; they
 never become an allow verdict. Duplicate JSON keys are rejected because parsers
 can interpret them differently. Cancellation propagates to the reviewer.
 
+Recognized transient transport failures get at most one retry after a short,
+randomized delay. Review attempts share the original 60-second deadline and
+capacity slot, resend the same evidence and current permission context, and parse
+the new response from scratch. A failed review never triggers regeneration.
+Refusals, invalid verdicts, HTTP errors and permission decisions are not retried.
+An account change stops recovery before another request is sent.
+
+The TUI and logs distinguish transport timeouts (`classifier_read_timeout`),
+the overall review deadline (`classifier_timeout`), missing stream completion,
+invalid responses, refusals and HTTP failures. The request inspector shows
+**Upstream attempts** when recovery was attempted. These diagnostics contain
+bounded categories, without reviewer text, proposed arguments or private
+transport-error strings.
+
 The classifier reviews client tool calls only. It does not review actions that
 Codex performs internally, such as native web search. It cannot inspect local
 filesystem state itself; unresolved effects must be flagged. All review input
 goes to the same Codex account that generated the response. No new credential or
 provider is required.
 
-The dashboard records classifier model requests separately so their reported
-tokens are counted. Claude Code's per-turn usage describes generation only;
-its displayed cost is not a reliable account of the additional Codex usage.
+The TUI records classifier model requests separately so their reported
+tokens are counted. A retry stays in the same review record and trace, with
+`upstream_attempts` showing the attempt count. Claude Code's per-turn usage
+describes generation only; its displayed cost is not a reliable account of the
+additional Codex usage.
+
+## Review failure categories
+
+A completed review can return `flagged` with HTTP 200: it evaluated a tool and
+identified a permission concern. A failed review supplies no verdict and releases
+no tools. Its failure also fails the parent generation, so All calls can show two
+failed records for one affected client turn. Use their linked traces to follow it.
+
+| Error kind | Meaning |
+| --- | --- |
+| `classifier_read_timeout` | An upstream transport read timed out. Recovery is attempted once within the remaining review deadline. |
+| `classifier_timeout` | The shared 60-second review deadline expired, including queue and retry time. |
+| `classifier_connection_reset`, `classifier_unexpected_eof`, `classifier_incomplete_stream` | The connection broke or ended before complete verdicts; eligible for one retry. |
+| `classifier_http` | Upstream returned an unsuccessful HTTP response; the review record retains its status. No transport retry. |
+| `classifier_invalid_response`, `classifier_invalid_verdict` | The response or verdicts failed validation. No retry and no allow fallback. |
+| `classifier_refused`, `classifier_upstream_response`, `classifier_unexpected_action` | The reviewer refused, returned an unsuccessful terminal event, or attempted an unsupported action. No retry. |
+| `classifier_auth`, `classifier_account_changed` | Sign-in became unavailable or no longer matched the generation account. No further request is sent under another account. |
+| `classifier_input_limit`, `classifier_output_limit` | The review input or output exceeded its bounded size. No retry. |
+| `canceled` | The caller canceled or disconnected; recorded as 499 rather than a gateway error. |
+
+Recognized HTTP/2 errors use `classifier_http2_...` categories. Unknown transport
+errors use `classifier_transport_read_error`; other uncategorized review failures
+use `classifier_failed`. These categories never include raw reviewer output or
+transport-error text. Repeated transport failures can still exhaust recovery;
+see [upstream recovery](running.md#upstream-recovery).
 
 ## Protocol evidence and validation
 
@@ -130,8 +171,12 @@ verdicts without subscription access:
 
 ```sh
 CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
-  go test -tags e2e -run TestClaudeSafeguardDecisions -v ./internal/proxy
+  go test -race -tags e2e \
+  -run '^TestClaudeSafeguard(Decisions|TransportRecovery)$' -v ./internal/proxy
 ```
+
+The recovery check injects a classifier transport timeout and verifies both
+verdicts through the real CLI without regenerating the proposed call.
 
 The opt-in live test sends proposed actions to GPT without executing them. Supply
 a private credential copy **without `refresh_token`** so it cannot rotate the

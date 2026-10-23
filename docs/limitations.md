@@ -89,9 +89,9 @@ status and error code. Overload does not start a quota cooldown. The gateway doe
 not replay a partially delivered response.
 
 **Not signed in to Codex.** Requests fail with 401, and the gateway logs a WARN
-`Codex sign-in unavailable` at startup. Run `claudex ctl setup --login`. The service manager
-stops the service before sign-in to avoid racing a token refresh. Port 1455 must be
-free for the browser callback.
+`Codex sign-in unavailable` at startup. Run `claudex ctl setup --login`. The
+credential store coordinates sign-in and token refresh with its shared file lock.
+Port 1455 must be free for the browser callback.
 
 **Codex sign-in could not be used or refreshed.** The sign-in exists, but the
 gateway could not use it or refresh it. Retry once. If the error continues, run
@@ -105,15 +105,18 @@ returned another account, so the gateway did not retry it. Retry the request.
 Existing sessions can keep environment values that already resolved a family name.
 
 **Codex stream was interrupted.** The gateway could not read the upstream response
-to completion. This alone does not point to a quota or translation bug. The service
+to completion. Before message delivery, recognized transient failures get one
+retry; after delivery starts, the interruption is returned without replay.
+This alone does not point to a quota or translation bug. The gateway
 log records a cause category, elapsed time, received bytes, and whether output had
 started. The dashboard shows the category and a redacted error excerpt with
 upstream type, code, and HTTP status. Known HTTP/2 errors, resets, timeouts,
 truncated reads, and event-size limits each get a category. Unrecognized errors
 show as `transport_read_error`. `upstream_stalled` means Codex stopped sending
 events. The `messages` log line of every failed request includes `error_type` and
-`error_kind`. Requests are not replayed after partial output. Older versions
-discarded the reader error, so their logs cannot show the cause.
+`error_kind`. See [upstream recovery](running.md#upstream-recovery) for attempt
+counts, ping behavior and recovery limits. Older versions discarded the reader
+error, so their logs cannot show the cause.
 
 **Compaction is slow.** First check whether the request is slow or actually failed.
 The dashboard shows request duration and usage, but it does not label compaction

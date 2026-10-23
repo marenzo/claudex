@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Align architecture, recovery/troubleshooting, TUI metrics and validation guides
+  with the current reviewer cache layout, retry boundaries and error categories.
+- Recover from recognized transient upstream transport failures with one bounded
+  retry before message delivery. Preserve streaming pings, discard partial state,
+  and keep classifier retries within their original deadline and permission scope.
+  Show attempt counts and specific classifier failure categories in diagnostics.
 - Preserve the reviewer's actual implicit cache boundary across turns by keeping
   fresh permission JSON after the final user evidence message. Canonicalize
   proposed and historical call batches identically, and verify the full previous

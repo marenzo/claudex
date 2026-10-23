@@ -95,8 +95,12 @@ func TestStreamFailureDiagnosticsPreservePrivacyAndPartialFailure(t *testing.T) 
 			if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.kind) || strings.Contains(w.Body.String(), "event: message_stop") {
 				t.Fatalf("failure was not surfaced: %d %s", w.Code, w.Body)
 			}
-			if calls != 1 {
-				t.Fatalf("interrupted request was replayed %d times", calls)
+			wantCalls := 1
+			if tc.name != "after_output" {
+				wantCalls = 2
+			}
+			if calls != wantCalls {
+				t.Fatalf("interrupted request made %d attempts, want %d", calls, wantCalls)
 			}
 			snapshot := s.metrics.Snapshot()
 			if len(snapshot.Recent) != 1 || snapshot.Recent[0].Status != 502 || snapshot.Recent[0].ErrorKind != tc.kind {

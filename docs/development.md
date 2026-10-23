@@ -36,6 +36,23 @@ Tests use local fixtures. They must not require a live subscription, a running
 gateway, an existing build, or user credentials. Opt-in integration tests are
 separate.
 
+The local real-client permission tests need an installed Claude Code binary but
+use localhost model fixtures and an isolated Claude configuration. They execute
+only a harmless `printf` for an allowed verdict and verify that a flagged call is
+denied. Both outcomes are checked with an injected classifier transport timeout:
+
+```sh
+CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
+  go test -race -tags e2e \
+  -run '^TestClaudeSafeguard(Decisions|TransportRecovery)$' -v ./internal/proxy
+```
+
+This command uses no live inference or subscription credentials. Default proxy
+tests cover bounded retry exhaustion, cancellation, account changes, simultaneous
+transport failures, discarded partial verdicts and tool buffers, and prevention
+of replay after message delivery. See [recovery behavior](running.md#upstream-recovery)
+and [review diagnostics](auto-mode.md#review-failure-categories).
+
 The live Codex integration test sits behind the `live` build tag. Give it a copy of
 your credential without a `refresh_token`, so it cannot rotate a running sign-in:
 

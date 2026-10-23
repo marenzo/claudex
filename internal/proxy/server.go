@@ -225,6 +225,9 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 			s.metrics.Finish(record)
 		}
 		attrs := []any{"trace_id", record.TraceID, "role", record.Role, "status", status, "duration_ms", record.DurationMS, "model", model}
+		if record.UpstreamAttempts > 1 {
+			attrs = append(attrs, "upstream_attempts", record.UpstreamAttempts)
+		}
 		if record.UpstreamFirstOutputMS != nil {
 			attrs = append(attrs, "upstream_first_output_ms", *record.UpstreamFirstOutputMS)
 		}
@@ -315,39 +318,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		fail(&apiError{Status: 429, Type: "rate_limit_error", Message: "Codex quota is unavailable. The proxy checks for recovery automatically every minute."})
 		return
 	}
-	response, credential, errUpstream := s.Client.Responses(r.Context(), credential, body, session)
-	errorSecrets = append(errorSecrets, credential.AccessToken, credential.RefreshToken, credential.AccountID)
-	if errors.Is(errUpstream, codex.ErrAccountChanged) {
-		fail(&apiError{Status: 401, Type: "authentication_error", Message: "The Codex sign-in switched to a different account during this request. Retry the request."})
-		return
-	}
-	if errUpstream != nil {
-		record.ErrorKind = streamErrorKind(errUpstream)
-		fail(&apiError{Status: 502, Type: "api_error", Message: "Could not connect to Codex: " + errUpstream.Error(),
-			Details: &metrics.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", errUpstream), Message: errUpstream.Error()}})
-		return
-	}
-	defer func() {
-		if errClose := response.Body.Close(); errClose != nil {
-			slog.Debug("Codex response close failed")
-		}
-	}()
-	if response.StatusCode != 200 {
-		errorBody, _ := io.ReadAll(io.LimitReader(response.Body, 64*1024))
-		e := parseUpstreamError(response.StatusCode, errorBody, time.Now())
-		if r.Context().Err() != nil {
-			fail(e)
-			return
-		}
-		if !e.QuotaUntil.IsZero() {
-			s.Quota.Limited(credential.AccountID, e.QuotaUntil)
-			w.Header().Set("Retry-After", "60")
-		}
-		fail(e)
-		return
-	}
-	stream := gjson.GetBytes(raw, "stream").Bool()
-	status = s.consume(w, r, response.Body, raw, body, credential.AccountID, stream, &record, inputTokens, review)
+	status = s.generate(w, r, raw, body, session, cfg, credential, &record, inputTokens, review, &errorSecrets)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -30,12 +30,24 @@ func TestClaudeSafeguardDecisions(t *testing.T) {
 	}
 	for _, outcome := range []string{"flagged", "not_flagged"} {
 		t.Run(outcome, func(t *testing.T) {
-			runClaudeSafeguardProbe(t, claude, outcome, nil)
+			runClaudeSafeguardProbe(t, claude, outcome, nil, false)
 		})
 	}
 }
 
-func runClaudeSafeguardProbe(t *testing.T, claude, outcome string, live *auth.Credential) {
+func TestClaudeSafeguardTransportRecovery(t *testing.T) {
+	claude := os.Getenv("CLAUDEX_TEST_CLAUDE_BIN")
+	if claude == "" {
+		t.Skip("set CLAUDEX_TEST_CLAUDE_BIN to opt into the local Claude Code protocol test")
+	}
+	for _, outcome := range []string{"flagged", "not_flagged"} {
+		t.Run(outcome, func(t *testing.T) {
+			runClaudeSafeguardProbe(t, claude, outcome, nil, true)
+		})
+	}
+}
+
+func runClaudeSafeguardProbe(t *testing.T, claude, outcome string, live *auth.Credential, retry bool) {
 	t.Helper()
 	var mu sync.Mutex
 	mainCalls, classifierCalls := 0, 0
@@ -49,6 +61,9 @@ func runClaudeSafeguardProbe(t *testing.T, claude, outcome string, live *auth.Cr
 		defer mu.Unlock()
 		if gjson.GetBytes(raw, "text.format.name").String() == "claudex_permission_verdicts" {
 			classifierCalls++
+			if retry && classifierCalls == 1 {
+				return interrupted("", retryTimeout()), nil
+			}
 			if live != nil {
 				r.Body = io.NopCloser(bytes.NewReader(raw))
 				return http.DefaultTransport.RoundTrip(r)
@@ -95,7 +110,11 @@ func runClaudeSafeguardProbe(t *testing.T, claude, outcome string, live *auth.Cr
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if classifierCalls != 1 || mainCalls != 2 {
+	wantClassifierCalls := 1
+	if retry {
+		wantClassifierCalls = 2
+	}
+	if classifierCalls != wantClassifierCalls || mainCalls != 2 {
 		t.Fatalf("main=%d classifier=%d: %s", mainCalls, classifierCalls, out)
 	}
 	if outcome == "flagged" {

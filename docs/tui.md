@@ -53,6 +53,9 @@ Wide tables label each call's type. A successful review can block a proposed
 tool; the row shows the blocked count instead of treating that verdict as a
 gateway error. Review details include proposed/blocked tool counts and the parent
 generation trace. Search a trace to find its related retained records.
+Calls that attempted transport recovery show **Upstream attempts** in the
+inspector. See [recovery behavior](running.md#upstream-recovery) and
+[review failure categories](auto-mode.md#review-failure-categories).
 
 **Models** shows the five supported models. Arrows choose a model; Tab focuses its
 statistics for scrolling. Lifetime totals and time-window response statistics are
@@ -103,7 +106,8 @@ only to dashboard requests. They do not limit inference duration.
 
 - **Totals.** Generation totals include completed `/v1/messages` requests. Auto
   reviews have separate lifetime, model, minute, and in-flight counters. All calls
-  combines both; a reviewed generation contributes one record to each group.
+  combines both; a turn that needs review contributes one generation record and
+  one review record. A transport retry adds no extra completed-request record.
   Dashboard polling and token-count requests do not affect these totals.
 - **Cancellations.** Client cancellations use status 499. They have their own
   `canceled` count in process, model, and minute totals. They stay in
@@ -124,8 +128,14 @@ only to dashboard requests. They do not limit inference duration.
   finished a response.
 - **Durations.** Generation duration runs from entry into the messages handler
   through completion and includes Auto review. Review duration includes waiting
-  for a reviewer slot and the model response. These durations overlap, so do not
+  for a reviewer slot, retry delay and the model response. Generation recovery
+  time also stays in generation duration. These durations overlap, so do not
   add them to calculate a response's waiting time.
+- **Upstream attempts.** `upstream_attempts` counts the original Responses
+  operation and any transport retry for that generation or review. The inspector
+  shows the field when it exceeds one. A successful token refresh and resend
+  after HTTP 401 is internal to a Responses operation. Calls rejected before
+  reaching that operation have no attempt count.
 - **Output timing.** **First from model** measures the first meaningful upstream
   delta: text, reasoning, or tool arguments. **First to client** measures the first
   translated content successfully written and, for streams, flushed to Claude
@@ -139,15 +149,17 @@ only to dashboard requests. They do not limit inference duration.
   reuse is cached input divided by total reported input. It is not a per-request
   cache-hit rate. Unknown usage, including failures without upstream usage, is
   never shown as zero. The dashboard does not estimate cost or remaining
-  subscription allowance.
+  subscription allowance. Reported usage from an interrupted generation attempt
+  is retained when a retry succeeds; usage never reported upstream is unknown.
 - **Quota recoveries.** This counts positive availability probes that cleared a
   cooldown. It is not a balance, a reset countdown, or a retry count.
 - **Request records.** Request IDs are process-local completion sequence numbers.
   Each call also has a unique trace; reviews carry their parent generation trace.
-  Optional error kinds are static transport categories. A failed request keeps an
-  error excerpt with source (`upstream`, `proxy`, or `transport`), type, code, message,
-  and upstream HTTP status when available. An HTTP 200 SSE response can still end
-  with an effective 502 outcome. Messages are capped at 4,096 UTF-8 bytes, and type
+  Error kinds are bounded transport or review categories. A failed request keeps
+  an error excerpt with source (`upstream`, `proxy`, `transport`, or `review`),
+  type, code, message, and upstream HTTP status when available. An HTTP 200 SSE
+  response can still end with an effective 502 outcome. Messages are capped at
+  4,096 UTF-8 bytes, and type
   and code at 128 bytes each. Truncation is marked.
 - **Request log.** Error details appear in the inspector and stay open during polling.
   Search includes them. A cancellation record explains that the caller disconnected

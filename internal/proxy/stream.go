@@ -70,6 +70,10 @@ func readEvents(ctx context.Context, body io.Reader, events chan<- streamEvent) 
 }
 
 func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *metrics.Request, inputTokens func() (int64, error), review *safeguardReview) int {
+	return s.consumeAttempt(w, r, body, original, translated, account, stream, record, inputTokens, review, nil)
+}
+
+func (s *Server) consumeAttempt(w http.ResponseWriter, r *http.Request, body io.Reader, original, translated []byte, account string, stream bool, record *metrics.Request, inputTokens func() (int64, error), review *safeguardReview, recovery *streamRecovery) int {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	events := make(chan streamEvent, 1)
@@ -81,6 +85,9 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 	idle := time.NewTimer(streamIdleTimeout)
 	defer idle.Stop()
 	started := false
+	if recovery != nil {
+		started = recovery.writer.started
+	}
 	model := gjson.GetBytes(translated, "model").String()
 	state := claude.NewStream(model, original)
 	var pending [][]byte
@@ -139,13 +146,19 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			record.ErrorKind = "canceled"
 			return 499
 		}
-		record.ErrorKind = kind
+		retrying := recovery != nil && recovery.allowed && !recovery.writer.committed && transientTransport(err)
 		// The transport may include response content or GOAWAY debug data in its
 		// error. Only a bounded category and the Go type are safe to retain.
 		slog.Warn("Codex stream failed", "kind", kind, "error_type", fmt.Sprintf("%T", err),
 			"model", model, "elapsed_ms", time.Since(record.Started).Milliseconds(),
 			"received_bytes", wireBytes, "response_started", started,
-			"meaningful_output", sawOutputDelta, "client_canceled", r.Context().Err() != nil)
+			"meaningful_output", sawOutputDelta, "client_canceled", r.Context().Err() != nil,
+			"trace_id", record.TraceID, "retrying", retrying)
+		if retrying {
+			recovery.err = err
+			return 502
+		}
+		record.ErrorKind = kind
 		e := &apiError{Status: 502, Type: "api_error", Message: message + " (" + kind + ")"}
 		if err != nil {
 			e.Details = &metrics.ErrorDetails{Source: "transport", Type: fmt.Sprintf("%T", err), Message: err.Error()}
@@ -177,7 +190,8 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 				}
 				if result.err != nil {
 					record.ErrorKind = classifierErrorKind(result.err)
-					return nil, fail(&apiError{Status: 502, Type: "api_error", Message: "Auto-mode safety review failed; no tool calls were released. Retry or use client-side classification."})
+					return nil, fail(&apiError{Status: 502, Type: "api_error", Message: "Auto-mode safety review failed (" + record.ErrorKind + "); no tool calls were released. Retry or use client-side classification.",
+						Details: &metrics.ErrorDetails{Source: "review", Type: record.ErrorKind, Message: "Auto-mode safety review failed (" + record.ErrorKind + "). No tool calls were released."}})
 				}
 				return safeguardResults(result.verdicts), 0
 			}

@@ -25,6 +25,10 @@ providers' terms and subscription limits still apply.
   breakdowns, errors, and settings in the bundled TUI. The automatic gateway starts
   with Claude and exits when unused; persistent Homebrew management is optional.
 
+Transient upstream transport failures receive one retry before message delivery.
+The TUI shows retry attempts and specific review failure categories. See
+[running and recovery](docs/running.md#upstream-recovery).
+
 ## Get started
 
 Download the Linux or macOS archive for your architecture from

@@ -29,15 +29,24 @@ flowchart LR
 4. The fixed Codex transport sends the request to the subscription Responses
    endpoint. After a 401, the gateway refreshes the sign-in once and retries. It
    does not retry when the refreshed sign-in belongs to a different account.
+   Separately, the proxy permits one retry for a recognized transient transport
+   failure before any message event reaches Claude Code. A retry discards partial
+   translation state and retains the original request and configuration snapshot.
    For streamed responses, the local input token estimate runs in parallel with
    this request, so it adds no delay before the first byte.
-5. The translator returns Claude-compatible JSON or streaming events. It preserves
+5. The translator builds Claude-compatible JSON or streaming events. It preserves
    tool IDs, errors, refusals, images, parallel calls, URL citations, and encrypted
    reasoning state for later turns. Codex search activity is left out of history.
    Anthropic accepts search-result replay only with opaque state that Anthropic
    issued. A terminal failure never becomes an empty successful turn.
-6. The gateway always records bounded request metadata and token usage. See
-   [the dashboard notes](tui.md) for what is kept.
+6. Requests with supported Auto Mode safeguards hold their entire response. When
+   client tools are proposed, a separate GPT request reviews them. The reviewer
+   has no tools and returns structured verdicts. Only a successful complete review
+   releases the response; a failed review releases no tools. Its transport retry
+   shares the original 60-second deadline. See [Auto Mode](auto-mode.md).
+7. The gateway records generation and review metadata and token usage separately.
+   Reviews link to their parent generation trace; retry attempts belong to the
+   same logical record. See [the TUI guide](tui.md) for retention and accounting.
 
 ## HTTP routes
 
@@ -129,9 +138,13 @@ Generation requests derive a hashed cache identity from Claude's user/session
 metadata and send it through `prompt_cache_key` and `Session_id`. The translator
 removes the changing billing attribution block while retaining actual application
 instructions. The optional reviewer has a separate stable identity and output
-schema, with permission context ahead of history. Changes to permission evidence
-therefore invalidate the relevant prefix. Cache use is decided upstream and
-reported through usage counts. See [prompt caching](prompt-caching.md).
+schema. System/tool evidence and history precede the proposed call batch, whose
+canonical JSON matches its later historical entry. Fresh permission context
+follows as host-supplied JSON in a trailing developer message, preserving the
+previous implicit cache boundary while evaluating current rules on every review.
+Quoted transcript and tool arguments remain untrusted evidence. Cache use is
+decided upstream and reported through usage counts. See
+[prompt caching](prompt-caching.md).
 
 ## Quota recovery
 

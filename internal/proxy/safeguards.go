@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marenzo/claudex/internal/codex"
 	"github.com/marenzo/claudex/internal/config"
 	"github.com/marenzo/claudex/internal/metrics"
 	translatorcommon "github.com/marenzo/claudex/internal/translator/common"
@@ -346,13 +347,20 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 	}
 	defer func() {
 		record.DurationMS = time.Since(record.Started).Milliseconds()
-		if reviewErr != nil {
-			record.ErrorKind = classifierErrorKind(reviewErr)
-			slog.Warn("auto mode classifier failed", "review_id", review.id, "trace_id", record.TraceID, "parent_trace_id", record.ParentTraceID, "role", record.Role, "model", model.ID, "error_kind", record.ErrorKind, "duration_ms", record.DurationMS)
-		}
 		if callerContext.Err() != nil {
 			record.Status = 499
 			record.ErrorKind = "canceled"
+		} else if reviewErr != nil {
+			record.ErrorKind = classifierErrorKind(reviewErr)
+			record.Error = &metrics.ErrorDetails{Source: "review", Type: record.ErrorKind, Message: "Auto-mode safety review failed (" + record.ErrorKind + "). No tool calls were released."}
+			var failure *classifierFailure
+			if errors.As(reviewErr, &failure) {
+				record.Error.Status = failure.status
+				if failure.transport {
+					record.Error.Source = "transport"
+				}
+			}
+			slog.Warn("auto mode classifier failed", "review_id", review.id, "trace_id", record.TraceID, "parent_trace_id", record.ParentTraceID, "role", record.Role, "model", model.ID, "error_kind", record.ErrorKind, "duration_ms", record.DurationMS, "upstream_attempts", record.UpstreamAttempts)
 		}
 		if s.metrics != nil {
 			s.metrics.Finish(record)
@@ -414,23 +422,51 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 			return nil, ctx.Err()
 		}
 	}
+	for attempt := range upstreamAttempts {
+		verdicts, err := s.classifyToolAttempt(ctx, review, account, body, &record)
+		if err == nil {
+			return verdicts, nil
+		}
+		var failure *classifierFailure
+		if attempt+1 == upstreamAttempts || ctx.Err() != nil || !errors.As(err, &failure) || !failure.transport || !transientTransport(failure.cause) {
+			return nil, err
+		}
+		slog.Info("upstream retry", "trace_id", record.TraceID, "parent_trace_id", record.ParentTraceID, "role", metrics.Review, "kind", classifierErrorKind(err), "attempt", attempt+2)
+		if err := waitForRetry(ctx); err != nil {
+			return nil, err
+		}
+		record.UpstreamFirstOutputMS = nil
+		record.Usage, record.UsageReported = metrics.Usage{}, false
+	}
+	panic("unreachable classifier attempt")
+}
+
+// Each retry parses a fresh response, never concatenating partial verdicts.
+func (s *Server) classifyToolAttempt(ctx context.Context, review *safeguardReview, account string, body []byte, record *metrics.Request) (map[string]toolVerdict, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	credential, err := s.Client.Auth.Get(ctx)
 	if err != nil {
-		return nil, err
+		return nil, &classifierFailure{kind: "classifier_auth", cause: err}
 	}
 	if credential.AccountID != account {
-		return nil, errors.New("classifier account changed")
+		return nil, &classifierFailure{kind: "classifier_account_changed"}
 	}
+	record.UpstreamAttempts++
 	response, _, err := s.Client.Responses(ctx, credential, body, review.session)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, codex.ErrAccountChanged) {
+			return nil, &classifierFailure{kind: "classifier_account_changed"}
+		}
+		return nil, classifierTransportFailure(err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("classifier HTTP %d", response.StatusCode)
+		return nil, &classifierFailure{kind: "classifier_http", status: response.StatusCode}
 	}
 	events := make(chan streamEvent, 1)
-	go readEvents(ctx, io.LimitReader(response.Body, classifierOutputLimit+1), events)
+	limited := &io.LimitedReader{R: response.Body, N: classifierOutputLimit + 1}
+	go readEvents(ctx, limited, events)
 	var text strings.Builder
 	for {
 		select {
@@ -438,42 +474,47 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 			return nil, ctx.Err()
 		case event, ok := <-events:
 			if !ok {
-				return nil, errors.New("classifier ended without completion")
+				if limited.N == 0 {
+					return nil, &classifierFailure{kind: "classifier_output_limit"}
+				}
+				return nil, classifierTransportFailure(io.EOF)
 			}
 			if event.err != nil {
-				return nil, event.err
+				return nil, classifierTransportFailure(event.err)
 			}
 			if !gjson.ValidBytes(event.data) {
-				return nil, errors.New("invalid classifier event")
+				return nil, &classifierFailure{kind: "classifier_invalid_response"}
 			}
 			e := gjson.ParseBytes(event.data)
 			switch e.Get("type").String() {
 			case "response.output_item.added", "response.output_item.done":
 				if kind := e.Get("item.type").String(); kind != "message" && kind != "reasoning" {
-					return nil, errors.New("classifier attempted an unexpected action")
+					return nil, &classifierFailure{kind: "classifier_unexpected_action"}
 				}
 			case "response.function_call_arguments.delta", "response.function_call_arguments.done":
-				return nil, errors.New("classifier attempted a tool call")
+				return nil, &classifierFailure{kind: "classifier_unexpected_action"}
 			case "response.output_text.delta":
 				if record.UpstreamFirstOutputMS == nil && e.Get("delta").String() != "" {
 					elapsed := time.Since(record.Started).Milliseconds()
 					record.UpstreamFirstOutputMS = &elapsed
 				}
 				text.WriteString(e.Get("delta").String())
-			case "response.failed", "response.incomplete", "error", "response.refusal.delta", "response.refusal.done":
-				return nil, errors.New("classifier failed or refused")
+			case "response.refusal.delta", "response.refusal.done":
+				return nil, &classifierFailure{kind: "classifier_refused"}
+			case "response.failed", "response.incomplete", "error":
+				return nil, &classifierFailure{kind: "classifier_upstream_response"}
 			case "response.completed":
 				if e.Get("response.status").String() != "completed" || e.Get("response.error").IsObject() {
-					return nil, errors.New("classifier completed with error")
+					return nil, &classifierFailure{kind: "classifier_invalid_response"}
 				}
 				var terminal strings.Builder
 				for _, item := range e.Get("response.output").Array() {
 					if kind := item.Get("type").String(); kind != "message" && kind != "reasoning" {
-						return nil, errors.New("classifier attempted an unexpected action")
+						return nil, &classifierFailure{kind: "classifier_unexpected_action"}
 					}
 					for _, part := range item.Get("content").Array() {
 						if part.Get("type").String() == "refusal" {
-							return nil, errors.New("classifier refused")
+							return nil, &classifierFailure{kind: "classifier_refused"}
 						}
 						if part.Get("type").String() == "output_text" {
 							terminal.WriteString(part.Get("text").String())
@@ -482,7 +523,7 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 				}
 				if terminal.Len() > 0 {
 					if text.Len() > 0 && text.String() != terminal.String() {
-						return nil, errors.New("classifier text mismatch")
+						return nil, &classifierFailure{kind: "classifier_invalid_response"}
 					}
 					text = terminal
 				}
@@ -501,9 +542,12 @@ func (s *Server) classifyTools(ctx context.Context, review *safeguardReview, acc
 						}
 					}
 					record.Flagged = flagged
-					slog.Info("auto mode classifier", "review_id", review.id, "trace_id", record.TraceID, "parent_trace_id", record.ParentTraceID, "role", record.Role, "model", model.ID, "tool_calls", len(review.calls), "flagged", flagged, "not_flagged", len(verdicts)-flagged, "duration_ms", time.Since(record.Started).Milliseconds(), "input_tokens", record.Usage.Input, "cached_tokens", record.Usage.Cached, "output_tokens", record.Usage.Output)
+					slog.Info("auto mode classifier", "review_id", review.id, "trace_id", record.TraceID, "parent_trace_id", record.ParentTraceID, "role", record.Role, "model", record.Model, "tool_calls", len(review.calls), "flagged", flagged, "not_flagged", len(verdicts)-flagged, "duration_ms", time.Since(record.Started).Milliseconds(), "input_tokens", record.Usage.Input, "cached_tokens", record.Usage.Cached, "output_tokens", record.Usage.Output, "upstream_attempts", record.UpstreamAttempts)
 				}
-				return verdicts, err
+				if err != nil {
+					return nil, &classifierFailure{kind: "classifier_invalid_verdict", cause: err}
+				}
+				return verdicts, nil
 			}
 		}
 	}
@@ -578,7 +622,29 @@ func classifierEvidence(payload map[string]json.RawMessage) []classifierEvidence
 
 // Never log classifier response text, tool arguments, explanations, or upstream
 // error bodies. These bounded categories distinguish outages from denials.
+type classifierFailure struct {
+	kind      string
+	cause     error
+	status    int
+	transport bool
+}
+
+func (e *classifierFailure) Error() string { return e.kind }
+func (e *classifierFailure) Unwrap() error { return e.cause }
+
+func classifierTransportFailure(err error) error {
+	kind := streamErrorKind(err)
+	if errors.Is(err, io.EOF) {
+		kind = "incomplete_stream"
+	}
+	return &classifierFailure{kind: "classifier_" + kind, cause: err, transport: true}
+}
+
 func classifierErrorKind(err error) string {
+	var failure *classifierFailure
+	if errors.As(err, &failure) && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		return failure.kind
+	}
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "classifier_timeout"

@@ -305,6 +305,9 @@ func (m *model) requestDetail(r metrics.Request, w int) string {
 	timeline[len(timeline)-1] = '●'
 	b.WriteString(ink(string(timeline), p.focus) + "\n")
 	line("First from model", duration(r.UpstreamFirstOutputMS))
+	if r.UpstreamAttempts > 1 {
+		line("Upstream attempts", strconv.Itoa(r.UpstreamAttempts))
+	}
 	if r.Role == metrics.Generation {
 		line("First to client", duration(r.ClientFirstOutputMS))
 		if r.ReviewMS != nil {

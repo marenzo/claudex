@@ -28,5 +28,5 @@ func TestLiveClaudeGPTSafeguardDecision(t *testing.T) {
 	if credential.RefreshToken != "" {
 		t.Fatal("live fixture must omit refresh_token")
 	}
-	runClaudeSafeguardProbe(t, claude, "not_flagged", &credential)
+	runClaudeSafeguardProbe(t, claude, "not_flagged", &credential, false)
 }
