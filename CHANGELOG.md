@@ -6,6 +6,9 @@
   fresh permission JSON after the final user evidence message. Canonicalize
   proposed and historical call batches identically, and verify the full previous
   boundary even beyond the 256-message diagnostic sample.
+- Render GPT source-reference markers as inline Markdown links from returned URL
+  annotations. Preserve existing links, code examples, and grouped citations;
+  separate unpositioned sources and identify missing source metadata clearly.
 - Separate generation and Auto review usage, outcomes, active counts, model totals,
   and minute history. Default the TUI to generation; press `g` to change call type.
 - Link review records to their generation request and distinguish upstream output,

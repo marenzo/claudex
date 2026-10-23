@@ -152,6 +152,7 @@ GOOS=linux GOARCH=arm64 make build
 - [Configuration](docs/configuration.md): settings, model routing, and Claude overrides
 - [Auto Mode](docs/auto-mode.md): permission review, setup, and current limits
 - [Prompt caching](docs/prompt-caching.md): cache reuse, accounting, and diagnostics
+- [Response formatting](docs/response-formatting.md): readable source citations in Claude Code
 - [TUI](docs/tui.md): dashboard controls, measurements, and retention
 - [Architecture](docs/architecture.md): APIs and translation behavior
 - [Limitations](docs/limitations.md): compatibility and troubleshooting

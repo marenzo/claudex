@@ -53,7 +53,7 @@ func appendCodexContentText(output []byte, params *streamState, outputIndex, con
 		text = text[len(previous):]
 	}
 	content.WriteString(text)
-	return appendCodexText(output, params, text)
+	return appendCodexRenderedText(output, params, key, false)
 }
 
 func appendCodexText(output []byte, params *streamState, text string) []byte {
@@ -78,7 +78,9 @@ func appendCodexMessageText(output []byte, params *streamState, outputIndex int6
 	for contentIndex, part := range item.Get("content").Array() {
 		switch part.Get("type").String() {
 		case "output_text":
+			output = appendCodexPartCitations(output, params, outputIndex, int64(contentIndex), part.Get("annotations"), false)
 			output = appendCodexContentText(output, params, outputIndex, int64(contentIndex), part.Get("text").String(), false)
+			output = appendCodexPartCitations(output, params, outputIndex, int64(contentIndex), part.Get("annotations"), true)
 		case "refusal":
 			params.HasRefusal = true
 			output = appendCodexContentText(output, params, outputIndex, int64(contentIndex), part.Get("refusal").String(), false)

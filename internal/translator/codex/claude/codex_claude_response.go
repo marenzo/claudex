@@ -46,7 +46,7 @@ type streamState struct {
 	EmittedThinkingSignatures map[string]struct{}
 	ThinkingSummarySeen       bool
 	OmitThinkingSummary       bool
-	CitationURLs              map[string]struct{}
+	CitationParts             map[codexContentPartKey]*codexCitationPart
 	FunctionCalls             map[string]*codexFunctionCallStream
 	FunctionCallQueue         []*codexFunctionCallStream
 	ActiveFunctionCall        *codexFunctionCallStream
@@ -142,15 +142,18 @@ func (s *Stream) Convert(rawJSON []byte) ([]byte, error) {
 		output = appendCodexContentText(output, params, codexContentOutputIndex(params, rootResult), rootResult.Get("content_index").Int(), text, isDelta)
 	case "response.output_text.annotation.added":
 		annotations := gjson.Parse("[" + rootResult.Get("annotation").Raw + "]")
-		output = appendCodexCitationLinks(output, params, annotations)
+		output = appendCodexPartCitations(output, params, codexContentOutputIndex(params, rootResult), rootResult.Get("content_index").Int(), annotations, false)
 	case "response.content_part.done":
-		output = appendCodexCitationLinks(output, params, rootResult.Get("part.annotations"))
+		index := codexContentOutputIndex(params, rootResult)
+		contentIndex := rootResult.Get("content_index").Int()
+		output = appendCodexPartCitations(output, params, index, contentIndex, rootResult.Get("part.annotations"), false)
 		partType := rootResult.Get("part.type").String()
 		if partType == "refusal" {
 			params.HasRefusal = true
 			output = appendCodexContentText(output, params, codexContentOutputIndex(params, rootResult), rootResult.Get("content_index").Int(), rootResult.Get("part.refusal").String(), false)
 		} else if partType == "output_text" {
 			output = appendCodexContentText(output, params, codexContentOutputIndex(params, rootResult), rootResult.Get("content_index").Int(), rootResult.Get("part.text").String(), false)
+			output = appendCodexPartCitations(output, params, index, contentIndex, rootResult.Get("part.annotations"), true)
 		}
 		if partType == "output_text" || partType == "refusal" {
 			output = append(output, stopCodexTextBlock(params)...)
@@ -169,11 +172,7 @@ func (s *Stream) Convert(rawJSON []byte) ([]byte, error) {
 			return nil, err
 		}
 		output = appendCodexTerminalContent(output, params, responseData)
-		for _, item := range responseData.Get("output").Array() {
-			for _, part := range item.Get("content").Array() {
-				output = appendCodexCitationLinks(output, params, part.Get("annotations"))
-			}
-		}
+		output = finishCodexCitations(output, params)
 		output = append(output, finalizeCodexThinkingBlock(params)...)
 		output = append(output, stopCodexTextBlock(params)...)
 		if typeStr == "response.incomplete" && !params.HasContent {
@@ -401,7 +400,7 @@ func ConvertResponse(modelName string, originalRequestRawJSON, rawJSON []byte) (
 							var text string
 							switch part.Get("type").String() {
 							case "output_text":
-								text = part.Get("text").String() + codexCitationLinks(part.Get("annotations"), make(map[string]struct{}))
+								text = renderCodexCitations(part.Get("text").String(), part.Get("annotations"))
 							case "refusal":
 								hasRefusal = true
 								text = part.Get("refusal").String()
