@@ -66,6 +66,9 @@ to type a value. **Ctrl+s** or **s** saves; **d** discards. Tab focuses connecti
 file information on wide terminals. Unsaved drafts survive navigation and polling.
 A gateway restart preserves the draft but requires discarding it before saving,
 so a draft from an earlier gateway cannot overwrite the new configuration.
+**Local feedback** controls the opt-in collector. Enable it and start a new Claude
+session to load the tool; disabling rejects new reports immediately. Stored reports
+remain available through `claudex ctl feedback list`. See [feedback](feedback.md).
 
 Charts use Braille lines, activity columns, and proportional token bars. Colors are
 paired with labels and values. Cached input is included in input; reasoning is

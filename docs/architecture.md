@@ -171,6 +171,17 @@ bypass an exhausted subscription, and it offers no account or model failover.
 | `internal/tokens` | Approximate local token counting |
 | `internal/metrics` | Bounded usage history and sampling |
 | `internal/tui` | Terminal views, polling, and configuration editing |
+| `internal/feedback` | Local MCP collector, validated bounded storage and feedback evaluation fixtures |
 | `internal/control` | Shared authenticated control protocol and client |
 | `internal/launcher` | Automatic worker startup, session ownership, Claude settings and bounded logs |
 | `internal/signature`, `internal/translator/common` | Reasoning-signature checks and shared Claude message helpers |
+
+## Feedback collection
+
+When enabled in preferences, the launcher injects a stdio MCP server backed by
+`claudex ctl feedback-mcp`. It calls the authenticated local control API:
+`POST /_claudex/feedback` stores a validated observation and
+`GET /_claudex/feedback?before=CURSOR` lists records. Settings updates and report
+acceptance share a lock so disable is an immediate persistence boundary. Collection
+runs independently of inference and never invokes the native Anthropic feedback
+client. See [feedback](feedback.md) for provenance, retention and trust limits.

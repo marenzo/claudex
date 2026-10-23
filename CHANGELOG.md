@@ -8,6 +8,11 @@
   retry before message delivery. Preserve streaming pings, discard partial state,
   and keep classifier retries within their original deadline and permission scope.
   Show attempt counts and specific classifier failure categories in diagnostics.
+- Disable native Anthropic feedback in launched sessions. Add an opt-in local
+  `ClaudexFeedback` tool, `ctl feedback` controls, bounded private storage, and a
+  TUI setting. Separate model mistakes from product defects and include synthetic
+  live-model evals plus a real Claude/MCP integration test.
+
 - Preserve the reviewer's actual implicit cache boundary across turns by keeping
   fresh permission JSON after the final user evidence message. Canonicalize
   proposed and historical call batches identically, and verify the full previous

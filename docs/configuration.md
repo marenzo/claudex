@@ -14,6 +14,7 @@ unchanged into a native installation.
 | `reasoning_effort` | `high` | Default reasoning effort |
 | `context_window` | `1000000` | Context window advertised to Claude Code |
 | `compact_window` | `900000` | Claude Code's automatic compaction window |
+| `feedback.enabled` | `false` | Opt-in local feedback collection; see [feedback](feedback.md) |
 | `auto_mode_classifier_model` | Empty (disabled) | Experimental separate GPT permission reviewer; see [auto mode](auto-mode.md) |
 
 ## Private files
@@ -26,6 +27,7 @@ A fresh native setup uses this layout:
   client-key                       Local gateway access secret
   auth/codex.json                   Codex subscription sign-in
   config.json.runtime/gateway.log   Rotating gateway log
+  config.json.feedback/            Opt-in feedback records
 ```
 
 The client key is a random secret used by Claude Code and the TUI for inference
@@ -88,7 +90,7 @@ bind another address, such as `0.0.0.0:8317` inside a container.
 ## Applying changes
 
 Open `claudex ctl config` or the TUI Settings view. Model, effort, reviewer,
-context, and compaction changes validate, save atomically, and apply live. Each
+context, compaction, and local-feedback changes validate, save atomically, and apply live. Each
 in-flight request retains its original settings, including its classifier model.
 New Claude processes load changed startup defaults; an existing process may keep
 sending its explicitly selected model, effort, and context settings.
@@ -128,6 +130,7 @@ history. Neither window changes the model's server-side limits.
 | `claudex ctl setup --no-login` | Initialize without signing in |
 | `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
 | `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
+| `claudex ctl feedback [on|off|status|list]` | Control local feedback collection or read stored reports |
 | `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
 
 Use `--config PATH` on setup, run, logs, status, or the TUI. TUI and status accept
@@ -162,6 +165,9 @@ windows change the generated values.
 | `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `1000000` |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | `900000` |
 | `CLAUDE_CODE_AUTO_MODE_SERVER` | `1` with the experimental GPT reviewer configured, otherwise `0` for client-side classification |
+| `DISABLE_FEEDBACK_COMMAND` | `1` |
+| `CLAUDE_CODE_SEND_FEEDBACK` | `0` |
+| `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY` | `1` |
 | `API_TIMEOUT_MS` | `600000` |
 
 Before applying its settings, the launcher removes inherited `ANTHROPIC_API_KEY`,
@@ -171,10 +177,12 @@ Before applying its settings, the launcher removes inherited `ANTHROPIC_API_KEY`
 `CLAUDE_CODE_EFFORT_LEVEL`.
 
 Claude settings derived at launch contain the configured `model`, `effortLevel`, and
-`permissions.deny: [Artifact]`. `effortLevel` defaults to `high`. A configured
+`permissions.deny: [Artifact, SendFeedback, SendUserFeedback]`. `effortLevel` defaults to `high`. A configured
 `ultra` becomes Claude's `ultracode` effort. The launcher passes
-`--disallowedTools Artifact --settings <JSON>`. Explicit Claude CLI
-options still work.
+`--disallowedTools Artifact,SendFeedback,SendUserFeedback --settings <JSON>`.
+When local feedback is enabled, it also adds the session MCP configuration and
+allows its collector tool. See [feedback](feedback.md). Explicit Claude CLI options
+still work.
 
 ## Monitoring data
 

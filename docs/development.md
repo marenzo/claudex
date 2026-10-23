@@ -100,3 +100,59 @@ Both workflows use `make package`; set `GOOS`, `GOARCH`, `VERSION`, and optional
 ## Security reports
 
 See [SECURITY.md](../SECURITY.md) for private vulnerability reporting.
+
+## Feedback tests and evals
+
+`make check` covers the schema, category consistency, redaction, atomic private
+storage, retry deduplication, retention/capacity, MCP lifecycle, authentication,
+settings persistence, live disable, pagination, CLI/TUI controls, and eval graders.
+No live provider or production config is needed.
+
+To exercise real Claude Code discovery, execution and a durable receipt with
+scripted inference (no provider request):
+
+```sh
+make build
+CLAUDEX_TEST_CLAUDE_BIN=/absolute/path/to/claude \
+CLAUDEX_TEST_BINARY="$PWD/dist/claudex" \
+go test -tags e2e -run '^TestClaudeLocalFeedbackMCP$' -count=1 -timeout=2m -v ./internal/proxy
+```
+
+The live feedback eval uses actual subscription quota. Use a private credential
+copy with `refresh_token` removed, as for other live tests. Generated tool calls
+are graded and never executed or sent to a feedback collector:
+
+```sh
+CLAUDEX_TEST_AUTH_FILE=/path/to/credential-copy.json \
+CLAUDEX_FEEDBACK_EVAL=1 CLAUDEX_FEEDBACK_EVAL_REPEATS=2 \
+CLAUDEX_FEEDBACK_EVAL_OUTPUT=/tmp/feedback-results.json \
+go test -tags live -run '^TestLiveFeedbackEvaluation$' -count=1 -timeout=20m -v ./internal/proxy
+```
+
+By default this runs 24 synthetic scenarios against GPT-6.1 Sol and GPT-6 Astra
+at low reasoning effort, comparing a generic description with the production
+instructions while holding the name/schema constant. Two repeats produce 192
+requests. Override models with comma-separated `CLAUDEX_FEEDBACK_EVAL_MODELS`, or
+set `CLAUDEX_FEEDBACK_EVAL_ARM=clarified` to run only the production description.
+The test requires every clarified case to pass; baseline failures are reported
+without failing the test. Infrastructure failures are separate and fail the run.
+
+The artifact retains generated calls, final text, model metadata, input fingerprints,
+latency and separate selection/schema/classification/recovery/reproduction/evidence
+scores. No hidden reasoning is requested. Evidence grading checks known anchors
+and literal sensitive strings, not arbitrary semantic truth. Review outputs before
+claiming grounding or production reliability. Expected labels are never sent to
+models. The baseline is not Anthropic's native tool.
+
+Replay retained synthetic outputs after a grader correction without spending quota:
+
+```sh
+CLAUDEX_FEEDBACK_EVAL_REPLAY=/tmp/feedback-results.json \
+CLAUDEX_FEEDBACK_EVAL_OUTPUT=/tmp/feedback-regraded.json \
+go test -tags live -run '^TestReplayFeedbackEvaluation$' -count=1 -v ./internal/proxy
+```
+
+Keep the original artifact; regrade metadata records the source and current fixture
+fingerprints. Regrading is meaningful only when model-facing scenarios and tool
+instructions match the original run. Delete the temporary credential copy after
+live runs. Do not commit credentials or private conversation captures.

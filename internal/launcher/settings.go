@@ -16,7 +16,8 @@ type ClaudeSettings struct {
 	AvailableModels []string          `json:"availableModels"`
 	ModelPicker     ClaudeModelPicker `json:"modelPicker"`
 	Permissions     struct {
-		Deny []string `json:"deny"`
+		Deny  []string `json:"deny"`
+		Allow []string `json:"allow,omitempty"`
 	} `json:"permissions"`
 }
 
@@ -56,6 +57,9 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS":             strconv.Itoa(cfg.ContextWindow),
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            strconv.Itoa(cfg.CompactWindow),
 		"API_TIMEOUT_MS":                             "600000",
+		"DISABLE_FEEDBACK_COMMAND":                   "1",
+		"CLAUDE_CODE_SEND_FEEDBACK":                  "0",
+		"CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY":        "1",
 	}
 	// Client-side auto mode remains available when the experimental server
 	// classifier is disabled. This setting does not disable permission checks.
@@ -84,7 +88,10 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 	if cfg.ReasoningEffort == "ultra" {
 		settings.EffortLevel = "ultracode"
 	}
-	settings.Permissions.Deny = []string{"Artifact"}
+	settings.Permissions.Deny = []string{"Artifact", "SendFeedback", "SendUserFeedback"}
+	if cfg.Feedback.Enabled {
+		settings.Permissions.Allow = []string{"mcp__claudex_feedback__ClaudexFeedback"}
+	}
 	return settings, nil
 }
 

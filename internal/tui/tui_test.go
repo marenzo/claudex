@@ -65,3 +65,26 @@ func TestAllViewsFitNarrowTerminalAndRetainUnknownUsage(t *testing.T) {
 		t.Fatal("unknown tokens displayed as zero")
 	}
 }
+
+func TestFeedbackSettingCanBeReachedToggledAndDiscarded(t *testing.T) {
+	m := newModel(context.Background(), &control.Client{URL: "http://localhost"}, true)
+	m.settings = control.Settings{Revision: "test", Writable: true, Preferences: control.PreferencesFor(config.DefaultsFor("/fixture"))}
+	m.resetDraft()
+	m.field = 4
+	m.Update(key("j"))
+	if m.field != 5 {
+		t.Fatal("feedback unreachable")
+	}
+	m.Update(key("l"))
+	if !m.draft.Feedback.Enabled || !m.dirty {
+		t.Fatal("toggle failed")
+	}
+	m.Update(key("d"))
+	if m.draft.Feedback.Enabled || m.dirty {
+		t.Fatal("discard failed")
+	}
+	m.setField("bogus")
+	if m.notice == "" {
+		t.Fatal("invalid value accepted")
+	}
+}

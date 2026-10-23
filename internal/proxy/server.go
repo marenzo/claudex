@@ -86,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/_claudex/config", s.controlConfig)
 	mux.HandleFunc("POST /_claudex/sessions", s.controlSession)
+	mux.HandleFunc("POST /_claudex/feedback", s.collectFeedback)
+	mux.HandleFunc("GET /_claudex/feedback", s.listFeedback)
 	mux.HandleFunc("POST /v1/messages", s.messages)
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.countTokens)
 	mux.HandleFunc("GET /v1/models", s.models)

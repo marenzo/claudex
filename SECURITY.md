@@ -17,8 +17,11 @@ Only the latest release receives fixes.
 - The client key and the Codex OAuth credential are written with mode 0600 in
   0700 directories, replaced atomically, and never logged.
 - Sign-in uses OAuth PKCE with a random state on a loopback callback listener.
-- Request and response bodies are never persisted; in-memory error excerpts are
+- Inference request and response bodies are never persisted by monitoring; in-memory error excerpts are
   bounded and credential-redacted.
+- Optional [local feedback](docs/feedback.md) persists the supplied structured reports
+  separately with private permissions, size/count limits and 30-day retention.
+  Free-text redaction is best-effort; review reports before sharing.
 
 The HTTP listener has no TLS. Do not expose it beyond the local machine or a
 trusted container network.

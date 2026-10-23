@@ -378,7 +378,7 @@ func (m *model) requestDetail(r metrics.Request, w int) string {
 	if r.ParentTraceID != "" {
 		line("Generation trace", Safe(r.ParentTraceID))
 	}
-	b.WriteString(ink("\nMessage content and tool arguments are not stored.", p.dim))
+	b.WriteString(ink("\nRequest content is not stored in metrics.\nOpt-in feedback reports persist separately for 30 days.", p.dim))
 	return b.String()
 }
 func (m *model) detailPane(r metrics.Request, w, h int) string {
@@ -673,10 +673,10 @@ func (m *model) preferences() string {
 		return m.panel("Settings", "Loading gateway settings…", w, h, false)
 	}
 
-	names := []string{"Default model", "Reasoning effort", "Command reviewer", "Context window", "Compact at"}
-	descriptions := []string{"Model used by new Claude sessions.", "How much reasoning the model performs.", "Reviews commands in auto mode. Effort: high.", "Maximum conversation size in tokens.", "Summarize the conversation at this many tokens."}
+	names := []string{"Default model", "Reasoning effort", "Command reviewer", "Context window", "Compact at", "Local feedback"}
+	descriptions := []string{"Model used by new Claude sessions.", "How much reasoning the model performs.", "Reviews commands in auto mode. Effort: high.", "Maximum conversation size in tokens.", "Summarize the conversation at this many tokens.", "Store observations locally. Off stops new reports immediately."}
 	var lines []string
-	positions := make([]int, 5)
+	positions := make([]int, len(names))
 	fieldW := max(8, w-4)
 	if w >= 100 {
 		fieldW = (w-1)/2 - 4
@@ -689,6 +689,8 @@ func (m *model) preferences() string {
 			lines = append(lines, ink(strings.Repeat("─", fieldW), p.border), strong("AUTO-MODE REVIEW", p.focus), "")
 		case 3:
 			lines = append(lines, ink(strings.Repeat("─", fieldW), p.border), strong("CONVERSATION SIZE", p.focus), "")
+		case 5:
+			lines = append(lines, ink(strings.Repeat("─", fieldW), p.border), strong("FEEDBACK", p.focus), "")
 		}
 		positions[i] = len(lines)
 		value := ""
@@ -706,11 +708,16 @@ func (m *model) preferences() string {
 			value = strconv.Itoa(m.draft.ContextWindow)
 		case 4:
 			value = strconv.Itoa(m.draft.CompactWindow)
+		case 5:
+			value = "off"
+			if m.draft.Feedback.Enabled {
+				value = "on"
+			}
 		}
 		labelW := min(21, max(8, fieldW/2))
 		valueW := max(4, fieldW-labelW)
 		choice := " " + value + " "
-		if i < 3 {
+		if i < 3 || i == 5 {
 			choice += " ‹ ›"
 		}
 		fg := p.text
@@ -726,7 +733,7 @@ func (m *model) preferences() string {
 	if !m.settings.Writable {
 		lines = append(lines, "", ink("This gateway's settings are read-only.", p.amber))
 	}
-	startup := ink("Read only · locations, not file contents", p.dim) + "\n\nListen address\n" + Safe(m.settings.Listen) + "\n\nCredential file\n" + Safe(m.settings.AuthFile) + "\n\nClient key file\n" + Safe(m.settings.ClientKeyFile) + "\n\n" + ink("Stop the gateway before editing these startup fields.\n\nRecent history: 500 requests, 120 minutes.\nCleared when the gateway restarts.\nMessage content and tool arguments are not stored.\nError excerpts are bounded and redacted.", p.dim)
+	startup := ink("Read only · locations, not file contents", p.dim) + "\n\nListen address\n" + Safe(m.settings.Listen) + "\n\nCredential file\n" + Safe(m.settings.AuthFile) + "\n\nClient key file\n" + Safe(m.settings.ClientKeyFile) + "\n\n" + ink("Stop the gateway before editing these startup fields.\n\nRecent history: 500 requests, 120 minutes.\nCleared when the gateway restarts.\nRequest content is not stored in metrics.\nOpt-in feedback reports persist separately for 30 days.\nError excerpts are bounded and redacted.", p.dim)
 	if w >= 100 {
 		lw := (w - 1) / 2
 		rw := w - lw - 1

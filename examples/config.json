@@ -5,5 +5,6 @@
   "model": "gpt-6-astra",
   "reasoning_effort": "high",
   "context_window": 1000000,
-  "compact_window": 900000
+  "compact_window": 900000,
+  "feedback": {"enabled": false}
 }

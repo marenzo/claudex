@@ -11,14 +11,20 @@ import (
 )
 
 type Config struct {
-	Listen                  string `json:"listen"`
-	AuthFile                string `json:"auth_file"`
-	ClientKeyFile           string `json:"client_key_file"`
-	Model                   string `json:"model"`
-	ReasoningEffort         string `json:"reasoning_effort"`
-	ContextWindow           int    `json:"context_window"`
-	CompactWindow           int    `json:"compact_window"`
-	AutoModeClassifierModel string `json:"auto_mode_classifier_model,omitempty"`
+	Listen                  string   `json:"listen"`
+	AuthFile                string   `json:"auth_file"`
+	ClientKeyFile           string   `json:"client_key_file"`
+	Model                   string   `json:"model"`
+	ReasoningEffort         string   `json:"reasoning_effort"`
+	ContextWindow           int      `json:"context_window"`
+	CompactWindow           int      `json:"compact_window"`
+	AutoModeClassifierModel string   `json:"auto_mode_classifier_model,omitempty"`
+	Feedback                Feedback `json:"feedback"`
+}
+
+// Feedback enables the local collector; it never enables Anthropic feedback.
+type Feedback struct {
+	Enabled bool `json:"enabled"`
 }
 
 func DefaultPath() string {

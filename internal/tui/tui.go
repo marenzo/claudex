@@ -362,7 +362,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				direction = -1
 			}
 			if m.tab == 3 && m.focus == 0 {
-				m.field = (m.field + direction + 5) % 5
+				m.field = (m.field + direction + 6) % 6
 				m.revealField = true
 			} else if m.tab == 1 && m.focus == 0 {
 				m.moveRequest(direction)
@@ -447,8 +447,13 @@ func (m *model) fieldValue() string {
 		return m.draft.Reviewer
 	case 3:
 		return strconv.Itoa(m.draft.ContextWindow)
-	default:
+	case 4:
 		return strconv.Itoa(m.draft.CompactWindow)
+	default:
+		if m.draft.Feedback.Enabled {
+			return "on"
+		}
+		return "off"
 	}
 }
 func (m *model) setField(value string) {
@@ -488,6 +493,12 @@ func (m *model) setField(value string) {
 			return
 		}
 		next.CompactWindow = n
+	case 5:
+		if value != "on" && value != "off" {
+			m.notice = "Choose on or off."
+			return
+		}
+		next.Feedback.Enabled = value == "on"
 	}
 	// Validate against dummy startup paths: these are not sent in settings writes.
 	_, err := next.Apply(config.DefaultsFor("/settings"))
@@ -511,6 +522,8 @@ func (m *model) cycleField(direction int) {
 		}
 	case 1:
 		values = []string{"low", "medium", "high", "xhigh", "max", "ultra"}
+	case 5:
+		values = []string{"off", "on"}
 	default:
 		return
 	}

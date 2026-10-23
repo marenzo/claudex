@@ -25,6 +25,8 @@ const usageText = `Claudex runs Claude Code with GPT through your Codex subscrip
   claudex ctl                    Open the terminal dashboard
   claudex ctl config             Open dashboard settings
   claudex ctl status [--json]     Inspect the running gateway
+  claudex ctl feedback on|off    Enable or disable local feedback collection
+  claudex ctl feedback list      Read collected observations as JSON
   claudex ctl setup              Prepare config and Codex sign-in
   claudex ctl run                Run a persistent foreground gateway
   claudex ctl logs [--follow]    Read gateway logs
@@ -66,6 +68,10 @@ func command(args []string) error {
 		return cmdStatus(rest)
 	case "logs":
 		return cmdLogs(rest)
+	case "feedback":
+		return cmdFeedback(rest)
+	case "feedback-mcp":
+		return cmdFeedbackMCP(rest)
 	case "--version":
 		if err := parseFlags(flag.NewFlagSet("version", flag.ContinueOnError), rest, "usage: claudex ctl --version"); err != nil {
 			return err

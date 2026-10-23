@@ -102,7 +102,10 @@ claudex ctl logs --follow       # bounded local gateway log
 
 Metrics are always collected in bounded memory: 500 recent requests and 120 minutes
 of history, cleared on gateway restart. Prompts, replies, and tool payloads are
-not retained. Error excerpts are bounded and redacted; review them before sharing.
+not retained in monitoring history. Opt-in [local feedback](docs/feedback.md) stores
+separate structured reports for 30 days and can be toggled with
+`claudex ctl feedback on|off`. Native Anthropic feedback is disabled in launched
+sessions. Error excerpts are bounded and redacted; review them before sharing.
 See [the TUI guide](docs/tui.md) for controls and exact metric definitions.
 
 ## Optional persistent gateway

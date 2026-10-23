@@ -101,6 +101,21 @@ func TestAutomaticWorkerSharedOwnershipAndExit(t *testing.T) {
 	if err != nil || status.Instance != instance {
 		t.Fatal("first disconnect stopped shared worker", err)
 	}
+
+	// Exercise the public command path against the real worker, not a mocked client.
+	for _, action := range []string{"on", "status", "list", "off"} {
+		if err := command([]string{"feedback", action, "--config", path}); err != nil {
+			t.Fatalf("feedback %s: %v", action, err)
+		}
+		state, err := c.Settings(ctx)
+		if err != nil || state.Preferences.Feedback.Enabled != (action != "off") {
+			t.Fatalf("feedback state after %s: %v", action, err)
+		}
+	}
+	saved, err := config.Load(path)
+	if err != nil || saved.Feedback.Enabled {
+		t.Fatal("feedback toggle not persisted", err)
+	}
 	stopTwo()
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {

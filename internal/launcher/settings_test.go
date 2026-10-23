@@ -27,7 +27,7 @@ func TestSettingsNormalizeAliasesAndFamilies(t *testing.T) {
 	if settings.Env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] != "GPT-5.6 Terra (Codex subscription)" {
 		t.Errorf("unexpected option name %q", settings.Env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"])
 	}
-	if settings.EffortLevel != "ultracode" || !reflect.DeepEqual(settings.Permissions.Deny, []string{"Artifact"}) {
+	if settings.EffortLevel != "ultracode" || !reflect.DeepEqual(settings.Permissions.Deny, []string{"Artifact", "SendFeedback", "SendUserFeedback"}) {
 		t.Errorf("unexpected settings %+v", settings)
 	}
 	for family, target := range map[string]string{"HAIKU": "gpt-6-luna", "SONNET": "gpt-6-sol", "OPUS": "gpt-6.1-sol", "FABLE": "gpt-6-astra"} {
@@ -99,5 +99,38 @@ func TestSettingsSelectClassifierLocation(t *testing.T) {
 	settings, err = Settings(cfg)
 	if err != nil || settings.Env["CLAUDE_CODE_AUTO_MODE_SERVER"] != "1" {
 		t.Fatalf("server opt in: %v %+v", err, settings)
+	}
+}
+
+func TestLocalFeedbackNeverRestoresAnthropicFeedback(t *testing.T) {
+	cfg := config.DefaultsFor("/fixture")
+	for _, enabled := range []bool{false, true} {
+		cfg.Feedback.Enabled = enabled
+		s, err := Settings(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("DISABLE_FEEDBACK_COMMAND", "0")
+		t.Setenv("CLAUDE_CODE_SEND_FEEDBACK", "1")
+		env := strings.Join(Environment(s, "http://127.0.0.1:8317", "fixture-key"), "\n")
+		if !strings.Contains(env, "DISABLE_FEEDBACK_COMMAND=1") || !strings.Contains(env, "CLAUDE_CODE_SEND_FEEDBACK=0") {
+			t.Fatal("Anthropic feedback re-enabled")
+		}
+		if enabled != (len(s.Permissions.Allow) == 1) {
+			t.Fatal("wrong local permission")
+		}
+	}
+	raw, err := FeedbackMCPConfig("/path with spaces/claudex", "http://127.0.0.1:8317", "/fixture/client-key", strings.Repeat("a", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Servers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if json.Unmarshal(raw, &m) != nil || m.Servers["claudex_feedback"].Command != "/path with spaces/claudex" {
+		t.Fatal("unsafe executable config")
 	}
 }

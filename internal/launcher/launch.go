@@ -2,12 +2,15 @@ package launcher
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/marenzo/claudex/internal/auth"
 	"github.com/marenzo/claudex/internal/config"
 	"github.com/marenzo/claudex/internal/control"
+	"github.com/marenzo/claudex/internal/feedback"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -141,7 +144,23 @@ func Run(claude string, args []string, cfg config.Config, c *control.Client) err
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrAttach, err)
 	}
-	cmd := exec.Command(claude, append([]string{"--disallowedTools", "Artifact", "--settings", string(data)}, RewriteArgs(args)...)...)
+	launchArgs := []string{"--disallowedTools", "Artifact,SendFeedback,SendUserFeedback", "--settings", string(data)}
+	if cfg.Feedback.Enabled {
+		binary, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		id := make([]byte, 16)
+		if _, err := rand.Read(id); err != nil {
+			return err
+		}
+		mcp, err := FeedbackMCPConfig(binary, c.URL, cfg.ClientKeyFile, hex.EncodeToString(id))
+		if err != nil {
+			return err
+		}
+		launchArgs = append(launchArgs, "--mcp-config", string(mcp))
+	}
+	cmd := exec.Command(claude, append(launchArgs, RewriteArgs(args)...)...)
 	cmd.Env = Environment(settings, c.URL, c.Key)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -184,6 +203,16 @@ func Run(claude string, args []string, cfg config.Config, c *control.Client) err
 			}()
 		}
 	}
+}
+
+// FeedbackMCPConfig adds a session-only server without editing the user's MCP
+// files or putting the gateway key in process arguments.
+func FeedbackMCPConfig(binary, address, keyFile, launchID string) ([]byte, error) {
+	return json.Marshal(map[string]any{"mcpServers": map[string]any{feedback.MCPName: map[string]any{
+		"type": "stdio", "command": binary,
+		"args":       []string{"ctl", "feedback-mcp", "--url", address, "--key-file", keyFile, "--launch-id", launchID},
+		"alwaysLoad": true,
+	}}})
 }
 func NativeCommand(args []string) bool {
 	if len(args) == 0 {

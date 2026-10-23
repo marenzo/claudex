@@ -21,15 +21,16 @@ import (
 const APIVersion = 2
 
 type Preferences struct {
-	Model         string `json:"model"`
-	Effort        string `json:"reasoning_effort"`
-	Reviewer      string `json:"auto_mode_classifier_model"`
-	ContextWindow int    `json:"context_window"`
-	CompactWindow int    `json:"compact_window"`
+	Model         string          `json:"model"`
+	Effort        string          `json:"reasoning_effort"`
+	Reviewer      string          `json:"auto_mode_classifier_model"`
+	ContextWindow int             `json:"context_window"`
+	CompactWindow int             `json:"compact_window"`
+	Feedback      config.Feedback `json:"feedback"`
 }
 
 func PreferencesFor(c config.Config) Preferences {
-	return Preferences{c.Model, c.ReasoningEffort, c.AutoModeClassifierModel, c.ContextWindow, c.CompactWindow}
+	return Preferences{c.Model, c.ReasoningEffort, c.AutoModeClassifierModel, c.ContextWindow, c.CompactWindow, c.Feedback}
 }
 func (p Preferences) Apply(c config.Config) (config.Config, error) {
 	c.Model = p.Model
@@ -37,6 +38,7 @@ func (p Preferences) Apply(c config.Config) (config.Config, error) {
 	c.AutoModeClassifierModel = p.Reviewer
 	c.ContextWindow = p.ContextWindow
 	c.CompactWindow = p.CompactWindow
+	c.Feedback = p.Feedback
 	if err := c.Validate(); err != nil {
 		return c, err
 	}
