@@ -8,3 +8,7 @@
 *.log
 *.test
 .DS_Store
+
+# Release planning/build outputs
+/release/
+__pycache__/

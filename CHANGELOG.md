@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.2.0 — 2026-10-23
+
+- Publish verified Linux and macOS archives automatically after successful main
+  checks. Start at v1.2.0 and increment patch versions on subsequent main pushes.
+
 - Align architecture, recovery/troubleshooting, TUI metrics and validation guides
   with the current reviewer cache layout, retry boundaries and error categories.
 - Recover from recognized transient upstream transport failures with one bounded
@@ -12,7 +17,6 @@
   `ClaudexFeedback` tool, `ctl feedback` controls, bounded private storage, and a
   TUI setting. Separate model mistakes from product defects and include synthetic
   live-model evals plus a real Claude/MCP integration test.
-
 - Preserve the reviewer's actual implicit cache boundary across turns by keeping
   fresh permission JSON after the final user evidence message. Canonicalize
   proposed and historical call batches identically, and verify the full previous

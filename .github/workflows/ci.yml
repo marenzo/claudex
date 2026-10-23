@@ -18,6 +18,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
       - run: go mod verify
       - run: make check build
   lint:
@@ -53,3 +54,12 @@ jobs:
           make package VERSION="dev-${GITHUB_SHA:0:12}" ARCHIVE="$archive"
           sha256sum "$archive"
           tar -tzf "$archive" >/dev/null
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, lint, binaries]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml

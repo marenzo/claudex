@@ -91,9 +91,21 @@ early. That step still passes after at least one successful compaction.
 ## Binary artifacts and releases
 
 GitHub Actions run checks on pushes and pull requests and build Linux and macOS
-archives for amd64 and arm64. A version tag builds the same archives and creates
-a draft GitHub release for maintainer review. Its notes list the commit subjects
-since the previous tag, so write commit subjects as user-facing change lines.
+archives for amd64 and arm64. Every successful push to the current `main` revision publishes a GitHub release
+after Linux/macOS checks, lint, and all four package builds pass. The release has
+Linux and macOS archives for amd64 and arm64, SHA-256 checksums, and build
+provenance attestations. Pull requests and manual CI runs do not publish.
+
+`VERSION` sets the minimum next stable version (currently `v1.2.0`). If that version
+already exists, the next main push increments the highest stable tag's patch
+number. Change `VERSION` to request a higher minor or major version. Reruns reuse
+a tag already attached to the same commit and leave published assets unchanged.
+Releases are serialized; superseded main revisions skip publication. The job
+assembles assets in a draft before automatically publishing the complete release.
+
+Notes use the matching `CHANGELOG.md` version section when present; otherwise they
+list commit subjects since the previous stable tag. Write commit subjects as
+user-facing change lines. Existing release tags remain immutable.
 Both workflows use `make package`; set `GOOS`, `GOARCH`, `VERSION`, and optionally
 `ARCHIVE` to package another target locally.
 
@@ -156,3 +168,9 @@ Keep the original artifact; regrade metadata records the source and current fixt
 fingerprints. Regrading is meaningful only when model-facing scenarios and tool
 instructions match the original run. Delete the temporary credential copy after
 live runs. Do not commit credentials or private conversation captures.
+
+The release planner uses only the Python standard library and is checked on both
+CI hosts with `python3 -m unittest discover -s .github/scripts -p 'test_*.py'`.
+The native binary does not require Python. `.github/workflows/release.yml` is called
+by CI after all required jobs succeed; creating a tag alone does not bypass checks
+or start a second release workflow.
