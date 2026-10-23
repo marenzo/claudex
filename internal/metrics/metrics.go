@@ -19,19 +19,51 @@ type Usage struct {
 	Reasoning int64 `json:"reasoning"` // A subset of output, not an additional charge.
 }
 
+type Role string
+
+const (
+	Generation Role = "generation"
+	Review     Role = "review"
+)
+
+// CacheDiagnostics contains keyed, process-local fingerprints and bounded prefix
+// comparisons. It never contains prompt text, paths, arguments or session IDs.
+type CacheDiagnostics struct {
+	Affinity                string `json:"affinity"`
+	Prefix                  string `json:"prefix"`
+	Context                 string `json:"context"`
+	Previous                bool   `json:"previous"`
+	PrefixChanged           bool   `json:"prefix_changed"`
+	ContextChanged          bool   `json:"context_changed"`
+	SharedMessages          int    `json:"shared_messages"`
+	SharedBytes             int    `json:"shared_bytes"`
+	ComparedMessages        int    `json:"compared_messages"`
+	InputMessages           int    `json:"input_messages"`
+	Truncated               bool   `json:"truncated"`
+	PreviousEndpointMatched bool   `json:"previous_endpoint_matched"`
+}
+
 type Request struct {
-	ID            int64         `json:"id"`
-	Started       time.Time     `json:"started"`
-	Completed     time.Time     `json:"completed"`
-	Model         string        `json:"model"`
-	Effort        string        `json:"effort"`
-	Status        int           `json:"status"`
-	ErrorKind     string        `json:"error_kind,omitempty"` // A static category, never a raw error message.
-	Error         *ErrorDetails `json:"error,omitempty"`
-	DurationMS    int64         `json:"duration_ms"`
-	FirstOutputMS *int64        `json:"first_output_ms,omitempty"`
-	Usage         Usage         `json:"tokens"`
-	UsageReported bool          `json:"usage_reported"`
+	ID                    int64             `json:"id"`
+	TraceID               string            `json:"trace_id"`
+	ParentTraceID         string            `json:"parent_trace_id,omitempty"`
+	Role                  Role              `json:"role"`
+	Started               time.Time         `json:"started"`
+	Completed             time.Time         `json:"completed"`
+	Model                 string            `json:"model"`
+	Effort                string            `json:"effort"`
+	Status                int               `json:"status"`
+	ErrorKind             string            `json:"error_kind,omitempty"` // A static category, never a raw error message.
+	Error                 *ErrorDetails     `json:"error,omitempty"`
+	DurationMS            int64             `json:"duration_ms"`
+	UpstreamFirstOutputMS *int64            `json:"upstream_first_output_ms,omitempty"`
+	ClientFirstOutputMS   *int64            `json:"client_first_output_ms,omitempty"`
+	ReviewMS              *int64            `json:"review_ms,omitempty"`
+	ToolCalls             int               `json:"tool_calls,omitempty"`
+	Flagged               int               `json:"flagged,omitempty"`
+	Cache                 *CacheDiagnostics `json:"cache,omitempty"`
+	Usage                 Usage             `json:"tokens"`
+	UsageReported         bool              `json:"usage_reported"`
 }
 
 // ErrorDetails holds a bounded, redacted excerpt prepared by the gateway.
@@ -46,9 +78,15 @@ type ErrorDetails struct {
 }
 
 func cloneRequest(record Request) Request {
-	if record.FirstOutputMS != nil {
-		elapsed := *record.FirstOutputMS
-		record.FirstOutputMS = &elapsed
+	for _, field := range []**int64{&record.UpstreamFirstOutputMS, &record.ClientFirstOutputMS, &record.ReviewMS} {
+		if *field != nil {
+			elapsed := **field
+			*field = &elapsed
+		}
+	}
+	if record.Cache != nil {
+		value := *record.Cache
+		record.Cache = &value
 	}
 	if record.Error != nil {
 		detail := *record.Error
@@ -60,8 +98,9 @@ func cloneRequest(record Request) Request {
 // Bucket accounts for every request completed in a minute, independently of the
 // sampled recent-request ring. The current minute is intentionally partial.
 type Bucket struct {
-	Time   time.Time `json:"time"`
-	Totals Totals    `json:"totals"`
+	Time   time.Time       `json:"time"`
+	Totals Totals          `json:"totals"`
+	Roles  map[Role]Totals `json:"roles"`
 }
 
 type Totals struct {
@@ -72,19 +111,28 @@ type Totals struct {
 	DurationMS    int64 `json:"duration_ms"`
 	UsageReported int64 `json:"usage_reported"`
 	Tokens        Usage `json:"tokens"`
+	ReviewedTools int64 `json:"reviewed_tools"`
+	FlaggedTools  int64 `json:"flagged_tools"`
+}
+
+type RoleSummary struct {
+	Active int               `json:"active"`
+	Totals Totals            `json:"totals"`
+	Models map[string]Totals `json:"models"`
 }
 
 type Snapshot struct {
-	Generated       time.Time         `json:"generated"`
-	Started         time.Time         `json:"started"`
-	UptimeSeconds   int64             `json:"uptime_seconds"`
-	Active          int               `json:"active"`
-	Totals          Totals            `json:"totals"`
-	Models          map[string]Totals `json:"models"`
-	Recent          []Request         `json:"recent"`
-	RecentLimit     int               `json:"recent_limit"`
-	History         []Bucket          `json:"history"`
-	QuotaRecoveries int64             `json:"quota_recoveries"`
+	Generated       time.Time            `json:"generated"`
+	Started         time.Time            `json:"started"`
+	UptimeSeconds   int64                `json:"uptime_seconds"`
+	Active          int                  `json:"active"`
+	Totals          Totals               `json:"totals"`
+	Models          map[string]Totals    `json:"models"`
+	Roles           map[Role]RoleSummary `json:"roles"`
+	Recent          []Request            `json:"recent"`
+	RecentLimit     int                  `json:"recent_limit"`
+	History         []Bucket             `json:"history"`
+	QuotaRecoveries int64                `json:"quota_recoveries"`
 }
 
 type Store struct {
@@ -93,6 +141,7 @@ type Store struct {
 	active     int
 	totals     Totals
 	models     map[string]Totals
+	roles      map[Role]RoleSummary
 	recent     [RecentLimit]Request
 	next       int
 	count      int
@@ -101,9 +150,20 @@ type Store struct {
 	now        func() time.Time
 }
 
-func New() *Store { return &Store{started: time.Now(), models: make(map[string]Totals), now: time.Now} }
+func New() *Store {
+	return &Store{started: time.Now(), models: make(map[string]Totals), roles: map[Role]RoleSummary{
+		Generation: {Models: make(map[string]Totals)}, Review: {Models: make(map[string]Totals)},
+	}, now: time.Now}
+}
 
-func (s *Store) Begin()     { s.mu.Lock(); defer s.mu.Unlock(); s.active++ }
+func (s *Store) Begin(role Role) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.active++
+	group := s.roles[role]
+	group.Active++
+	s.roles[role] = group
+}
 func (s *Store) Recovered() { s.mu.Lock(); defer s.mu.Unlock(); s.recoveries++ }
 
 func (s *Store) Finish(record Request) {
@@ -117,12 +177,22 @@ func (s *Store) Finish(record Request) {
 	totals := s.models[record.Model]
 	add(&totals, record)
 	s.models[record.Model] = totals
+	group := s.roles[record.Role]
+	group.Active--
+	add(&group.Totals, record)
+	modelTotals := group.Models[record.Model]
+	add(&modelTotals, record)
+	group.Models[record.Model] = modelTotals
+	s.roles[record.Role] = group
 	minute := record.Completed.Truncate(time.Minute)
 	bucket := &s.history[minute.Unix()/60%HistoryMinutes]
 	if !bucket.Time.Equal(minute) {
-		*bucket = Bucket{Time: minute}
+		*bucket = Bucket{Time: minute, Roles: make(map[Role]Totals)}
 	}
 	add(&bucket.Totals, record)
+	roleTotals := bucket.Roles[record.Role]
+	add(&roleTotals, record)
+	bucket.Roles[record.Role] = roleTotals
 	s.recent[s.next] = record
 	s.next = (s.next + 1) % RecentLimit
 	if s.count < RecentLimit {
@@ -148,13 +218,17 @@ func add(t *Totals, r Request) {
 	t.Tokens.Cached += r.Usage.Cached
 	t.Tokens.Output += r.Usage.Output
 	t.Tokens.Reasoning += r.Usage.Reasoning
+	if r.Role == Review && r.Status == 200 {
+		t.ReviewedTools += int64(r.ToolCalls)
+		t.FlaggedTools += int64(r.Flagged)
+	}
 }
 
 func (s *Store) Snapshot() Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	snapshot := Snapshot{Generated: now, Started: s.started, UptimeSeconds: int64(now.Sub(s.started).Seconds()), Active: s.active, Totals: s.totals, Models: make(map[string]Totals, len(s.models)), Recent: make([]Request, 0, s.count), RecentLimit: RecentLimit, History: make([]Bucket, 0, HistoryMinutes), QuotaRecoveries: s.recoveries}
+	snapshot := Snapshot{Generated: now, Started: s.started, UptimeSeconds: int64(now.Sub(s.started).Seconds()), Active: s.active, Totals: s.totals, Models: make(map[string]Totals, len(s.models)), Roles: make(map[Role]RoleSummary, len(s.roles)), Recent: make([]Request, 0, s.count), RecentLimit: RecentLimit, History: make([]Bucket, 0, HistoryMinutes), QuotaRecoveries: s.recoveries}
 	lastMinute := now.Truncate(time.Minute)
 	for i := HistoryMinutes - 1; i >= 0; i-- {
 		minute := lastMinute.Add(-time.Duration(i) * time.Minute)
@@ -165,14 +239,51 @@ func (s *Store) Snapshot() Snapshot {
 		if !bucket.Time.Equal(minute) {
 			bucket = Bucket{Time: minute}
 		}
+		bucket.Roles = cloneTotals(bucket.Roles)
 		snapshot.History = append(snapshot.History, bucket)
 	}
 	for model, totals := range s.models {
 		snapshot.Models[model] = totals
+	}
+	for role, group := range s.roles {
+		group.Models = cloneTotals(group.Models)
+		snapshot.Roles[role] = group
 	}
 	for i := 0; i < s.count; i++ {
 		record := s.recent[(s.next-1-i+RecentLimit)%RecentLimit]
 		snapshot.Recent = append(snapshot.Recent, cloneRequest(record))
 	}
 	return snapshot
+}
+
+func cloneTotals[K comparable](source map[K]Totals) map[K]Totals {
+	out := make(map[K]Totals, len(source))
+	for key, value := range source {
+		out[key] = value
+	}
+	return out
+}
+
+// ForRole uses complete minute and lifetime counters, rather than reconstructing
+// totals from the sampled request ring. An empty role selects all upstream calls.
+func (s Snapshot) ForRole(role Role) Snapshot {
+	if role == "" {
+		return s
+	}
+	group := s.Roles[role]
+	s.Active, s.Totals, s.Models = group.Active, group.Totals, group.Models
+	rows := make([]Request, 0, len(s.Recent))
+	for _, row := range s.Recent {
+		if row.Role == role {
+			rows = append(rows, row)
+		}
+	}
+	s.Recent = rows
+	history := make([]Bucket, len(s.History))
+	for i, bucket := range s.History {
+		bucket.Totals = bucket.Roles[role]
+		history[i] = bucket
+	}
+	s.History = history
+	return s
 }

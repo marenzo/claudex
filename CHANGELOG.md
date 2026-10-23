@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Preserve the reviewer's actual implicit cache boundary across turns by keeping
+  fresh permission JSON after the final user evidence message. Canonicalize
+  proposed and historical call batches identically, and verify the full previous
+  boundary even beyond the 256-message diagnostic sample.
+- Separate generation and Auto review usage, outcomes, active counts, model totals,
+  and minute history. Default the TUI to generation; press `g` to change call type.
+- Link review records to their generation request and distinguish upstream output,
+  client-delivered content, and review duration. Keep blocked verdicts distinct
+  from failed review requests.
+- Preserve a stable review evidence prefix when live permission or Git context
+  changes. Add bounded, keyed cache diagnostics without retaining source content.
+- Upgrade the private control/metrics API to version 2; update both local binaries
+  together. The Anthropic-compatible Messages API is unchanged.
+
 ## v1.1.0 — 2026-10-22
 
 - Replace the web dashboard with a bundled, responsive Bubble Tea TUI: live

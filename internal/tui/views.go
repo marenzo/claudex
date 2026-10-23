@@ -31,6 +31,9 @@ func orAll(s string) string {
 	return Safe(s)
 }
 func outcome(r metrics.Request) string {
+	if r.Role == metrics.Review && r.Status < 400 && r.Flagged > 0 {
+		return fmt.Sprintf("%d blocked", r.Flagged)
+	}
 	if r.Status == 499 {
 		return "○ Canceled"
 	}
@@ -43,6 +46,9 @@ func outcome(r metrics.Request) string {
 	return "✓ OK"
 }
 func (m *model) outcomeColor(r metrics.Request) string {
+	if r.Role == metrics.Review && r.Status < 400 && r.Flagged > 0 {
+		return colors(m.light).amber
+	}
 	p := colors(m.light)
 	if r.Status == 499 {
 		return p.dim
@@ -52,6 +58,19 @@ func (m *model) outcomeColor(r metrics.Request) string {
 	}
 	return p.ok
 }
+
+func roleLabel(role metrics.Role) string {
+	switch role {
+	case metrics.Generation:
+		return "Generation"
+	case metrics.Review:
+		return "Auto reviews"
+	default:
+		return "All calls"
+	}
+}
+
+func (m *model) scopedSnapshot() metrics.Snapshot { return m.snapshot.ForRole(m.role) }
 func totalsFor(rows []metrics.Request) metrics.Totals {
 	var t metrics.Totals
 	for _, r := range rows {
@@ -70,6 +89,10 @@ func totalsFor(rows []metrics.Request) metrics.Totals {
 			t.Tokens.Cached += r.Usage.Cached
 			t.Tokens.Output += r.Usage.Output
 			t.Tokens.Reasoning += r.Usage.Reasoning
+			if r.Role == metrics.Review && r.Status == 200 {
+				t.ReviewedTools += int64(r.ToolCalls)
+				t.FlaggedTools += int64(r.Flagged)
+			}
 		}
 	}
 	return t
@@ -84,7 +107,7 @@ func (m *model) usageText(t metrics.Totals, w int) string {
 }
 func (m *model) requestSummary(w, h int, rows []metrics.Request) string {
 	p := colors(m.light)
-	all, t := totalsFor(m.snapshot.Recent), totalsFor(rows)
+	all, t := totalsFor(m.scopedSnapshot().Recent), totalsFor(rows)
 	parts := []segment{{"Successful", all.Requests - all.Errors - all.Canceled, p.ok}, {"Failed", all.Errors, p.bad}, {"Canceled", all.Canceled, p.dim}}
 	var times []int64
 	for _, r := range rows {
@@ -127,6 +150,9 @@ func (m *model) requestSummary(w, h int, rows []metrics.Request) string {
 		usage = pair(ink("Input from cache", p.dim), strong(ratio(t.Tokens.Cached, t.Tokens.Input), p.good), rw-4) + "\n\n" + allocation([]segment{{"Cached", t.Tokens.Cached, p.good}, {"New", t.Tokens.Input - t.Tokens.Cached, p.input}, {"Output", t.Tokens.Output, p.blue}}, rw-4) + "\n" + ink("■ cached "+compact(t.Tokens.Cached), p.good) + "  " + ink("■ new "+compact(t.Tokens.Input-t.Tokens.Cached), p.input) + "  " + ink("■ output "+compact(t.Tokens.Output), p.blue) + "\n\n"
 	}
 	usage += pair(ink("Median response", p.dim), strong(duration(metrics.Percentile(times, .5)), p.text), rw-4) + "\n" + ink(fmt.Sprintf("Token counts available: %d of %d requests", t.UsageReported, t.Requests), p.dim)
+	if t.ReviewedTools > 0 {
+		usage += "\n" + ink(fmt.Sprintf("%d tools reviewed · %d blocked", t.ReviewedTools, t.FlaggedTools), p.amber)
+	}
 	return spaced(m.panel("Request outcomes", left, lw, h, false), m.panel("Usage & response time", usage, rw, h, false), lw, rw, h, 2)
 }
 func (m *model) requestFilters(w int) string {
@@ -169,14 +195,22 @@ func (m *model) requestTable(w, h int, rows []metrics.Request, y int) string {
 	iw := max(1, w-4)
 	var lines []string
 	wide := iw >= 66
-	first := iw >= 88
-	effort := iw >= 99
+	typeW := 0
+	if m.role == "" && iw >= 70 {
+		typeW = 12
+	}
+	first := iw >= 88+typeW
+	effort := iw >= 99+typeW
 	timeW, modelW, resultW, durationW, cacheW := 10, 14, 12, 10, 8
 	if iw < 48 {
 		timeW, modelW, resultW, durationW = 6, max(6, iw-24), 10, 6
 	}
-	row := func(at, model, result, elapsed, cache, delta, eff string) string {
-		text := cell(at, timeW) + cell(model, modelW) + cell(result, resultW) + right(elapsed, durationW-1) + " "
+	row := func(at, model, role, result, elapsed, cache, delta, eff string) string {
+		text := cell(at, timeW) + cell(model, modelW)
+		if typeW > 0 {
+			text += cell(role, typeW)
+		}
+		text += cell(result, resultW) + right(elapsed, durationW-1) + " "
 		if wide {
 			text += right(cache, cacheW-1) + " "
 		}
@@ -188,7 +222,7 @@ func (m *model) requestTable(w, h int, rows []metrics.Request, y int) string {
 		}
 		return cell("  "+text, iw)
 	}
-	header := row("Started", "Model", "Result", "Duration", "Cache", "First out", "Effort")
+	header := row("Started", "Model", "Type", "Result", "Duration", "Cache", "To client", "Effort")
 	lines = append(lines, surface(header, iw, p.raised, p.dim), ink(strings.Repeat("─", iw), p.border))
 	if len(rows) == 0 {
 		lines = append(lines, "", strong("No matching requests", p.text), ink("Press x to clear filters.", p.dim))
@@ -218,7 +252,7 @@ func (m *model) requestTable(w, h int, rows []metrics.Request, y int) string {
 		if iw < 48 {
 			at = r.Started.Local().Format("15:04")
 		}
-		line := row(at, modelName(r.Model), ink(outcome(r), m.outcomeColor(r)), duration(&r.DurationMS), cache, duration(r.FirstOutputMS), Safe(r.Effort))
+		line := row(at, modelName(r.Model), roleLabel(r.Role), ink(outcome(r), m.outcomeColor(r)), duration(&r.DurationMS), cache, duration(r.ClientFirstOutputMS), Safe(r.Effort))
 		if r.ID == m.selected {
 			line = surface("▎"+ansi.Cut(line, 1, iw), iw, p.raised, p.focus)
 		}
@@ -257,20 +291,31 @@ func (m *model) requestDetail(r metrics.Request, w int) string {
 	var b strings.Builder
 	line := func(label, value string) { b.WriteString(pair(ink(label, p.dim), value, w) + "\n") }
 	b.WriteString(strong(modelName(r.Model), p.text) + ink(" · "+Safe(r.Effort)+" effort", p.dim) + "\n")
+	line("Type", roleLabel(r.Role))
 	line(outcome(r), strong(duration(&r.DurationMS), m.outcomeColor(r)))
 	b.WriteString("\n")
 	line("Started", r.Started.Local().Format("Jan 02 15:04:05"))
 	line("Ended", r.Completed.Local().Format("Jan 02 15:04:05"))
 	b.WriteString("\n" + strong("Response timeline", p.text) + "\n")
 	timeline := []rune(strings.Repeat("─", max(1, w)))
-	if r.FirstOutputMS != nil && r.DurationMS > 0 {
-		i := min(len(timeline)-1, max(0, int(float64(*r.FirstOutputMS)/float64(r.DurationMS)*float64(len(timeline)-1))))
+	if r.ClientFirstOutputMS != nil && r.DurationMS > 0 {
+		i := min(len(timeline)-1, max(0, int(float64(*r.ClientFirstOutputMS)/float64(r.DurationMS)*float64(len(timeline)-1))))
 		timeline[i] = '◆'
 	}
 	timeline[len(timeline)-1] = '●'
 	b.WriteString(ink(string(timeline), p.focus) + "\n")
-	line("First output", duration(r.FirstOutputMS))
-	b.WriteString(ink("May include reasoning or tool data before text.", p.dim) + "\n\n")
+	line("First from model", duration(r.UpstreamFirstOutputMS))
+	if r.Role == metrics.Generation {
+		line("First to client", duration(r.ClientFirstOutputMS))
+		if r.ReviewMS != nil {
+			line("Auto review time", duration(r.ReviewMS))
+		}
+		b.WriteString(ink("Client timing excludes keep-alive pings.", p.dim) + "\n\n")
+	} else {
+		line("Tools reviewed", number(int64(r.ToolCalls)))
+		line("Tools blocked", number(int64(r.Flagged)))
+		b.WriteString(ink("Review duration includes queue and model time.", p.dim) + "\n\n")
+	}
 	if r.UsageReported {
 		line("Input breakdown", strong(number(r.Usage.Input)+" tokens", p.text))
 		b.WriteString(breakdown([]segment{{"From cache", r.Usage.Cached, p.good}, {"New input", max(0, r.Usage.Input-r.Usage.Cached), p.input}}, w) + "\n\n")
@@ -301,6 +346,34 @@ func (m *model) requestDetail(r metrics.Request, w int) string {
 		if e.Truncated {
 			b.WriteString("Error excerpt shortened.\n")
 		}
+	}
+	if r.Cache != nil {
+		v := r.Cache
+		b.WriteString("\n" + strong("Cache diagnostics", p.text) + "\n")
+		if !v.Previous {
+			b.WriteString("First observed review in this cache group.\n")
+		} else {
+			line("Shared prefix", fmt.Sprintf("%d messages · %s bytes", v.SharedMessages, compact(int64(v.SharedBytes))))
+			if v.PreviousEndpointMatched {
+				b.WriteString("Previous cache boundary is preserved.\n")
+			}
+			if v.PrefixChanged {
+				b.WriteString("Instructions or tool definitions changed.\n")
+			}
+			if v.ContextChanged {
+				b.WriteString("Current permission or live context changed.\n")
+			}
+		}
+		if v.Truncated {
+			b.WriteString("Prefix comparison limited to 256 messages.\n")
+		}
+	}
+	if r.TraceID != "" {
+		b.WriteString("\n" + strong("Request links", p.text) + "\n")
+		line("Trace", Safe(r.TraceID))
+	}
+	if r.ParentTraceID != "" {
+		line("Generation trace", Safe(r.ParentTraceID))
 	}
 	b.WriteString(ink("\nMessage content and tool arguments are not stored.", p.dim))
 	return b.String()
@@ -364,7 +437,7 @@ func (m *model) requests() string {
 func (m *model) overview() string {
 	w, h, _ := m.dimensions()
 	p := colors(m.light)
-	s := metrics.Window(m.snapshot, m.minutes)
+	s := metrics.Window(m.scopedSnapshot(), m.minutes)
 	var t metrics.Totals
 	var activity, failed, canceled, cached, input, output []int64
 	for _, b := range s.History {
@@ -473,7 +546,7 @@ func (m *model) overview() string {
 			for i, n := range s.Histogram {
 				content += cell(metrics.HistogramLabels[i], 7) + ink(bar(int64(n), int64(peak), max(1, iw-14)), p.blue) + fmt.Sprintf(" %d\n", n)
 			}
-			content += "First output median " + duration(s.FirstP50) + fmt.Sprintf(" (%d reported)", s.FirstCount) + "\n99% within " + duration(s.P99)
+			content += "First to client " + duration(s.FirstP50) + fmt.Sprintf(" (%d reported)", s.FirstCount) + "\n99% within " + duration(s.P99)
 		case 3:
 			title = "Model & effort mix"
 			mix := map[string]int64{}
@@ -546,10 +619,11 @@ func (m *model) models() string {
 	p := colors(m.light)
 	ids := modelIDs()
 	m.modelIndex = min(m.modelIndex, len(ids)-1)
-	sample := metrics.Window(m.snapshot, m.minutes)
+	snapshot := m.scopedSnapshot()
+	sample := metrics.Window(snapshot, m.minutes)
 	var cards []string
 	for i, id := range ids {
-		t := m.snapshot.Models[id]
+		t := snapshot.Models[id]
 		name := modelName(id)
 		if m.settings.Preferences.Model == id {
 			name += " · default"
@@ -561,17 +635,17 @@ func (m *model) models() string {
 		cards = append(cards, strong(prefix+name, p.focus), fmt.Sprintf("  %d requests · %d failed · %d canceled", t.Requests, t.Errors, t.Canceled), ink("  Input cache "+ratio(t.Tokens.Cached, t.Tokens.Input), p.good), "")
 	}
 	id := ids[m.modelIndex]
-	t := m.snapshot.Models[id]
+	t := snapshot.Models[id]
 	var times, first []int64
 	for _, r := range sample.Records {
 		if r.Model == id {
 			times = append(times, r.DurationMS)
-			if r.FirstOutputMS != nil {
-				first = append(first, *r.FirstOutputMS)
+			if r.ClientFirstOutputMS != nil {
+				first = append(first, *r.ClientFirstOutputMS)
 			}
 		}
 	}
-	detail := strong(modelName(id), p.focus) + "\n" + ink("Totals since gateway started", p.dim) + "\n\n" + fmt.Sprintf("%d completed · %d rate limited\nFailure rate %s (excludes cancellations)\n\n", t.Requests, t.RateLimited, ratio(t.Errors, t.Requests-t.Canceled)) + m.usageText(t, max(1, w/2-6)) + fmt.Sprintf("\nCounts reported for %d of %d requests\n\n", t.UsageReported, t.Requests) + strong("Response time", p.text) + fmt.Sprintf("\n%d retained requests in last %dm\nMedian %s\n95%% within %s\nFirst output median %s\n\n", len(times), m.minutes, duration(metrics.Percentile(times, .5)), duration(metrics.Percentile(times, .95)), duration(metrics.Percentile(first, .5)))
+	detail := strong(modelName(id), p.focus) + "\n" + ink(roleLabel(m.role)+" · totals since gateway started", p.dim) + "\n\n" + fmt.Sprintf("%d completed · %d rate limited\nFailure rate %s (excludes cancellations)\n\n", t.Requests, t.RateLimited, ratio(t.Errors, t.Requests-t.Canceled)) + m.usageText(t, max(1, w/2-6)) + fmt.Sprintf("\nCounts reported for %d of %d requests\n\n", t.UsageReported, t.Requests) + strong("Response time", p.text) + fmt.Sprintf("\n%d retained requests in last %dm\nMedian %s\n95%% within %s\nFirst to client median %s\n\n", len(times), m.minutes, duration(metrics.Percentile(times, .5)), duration(metrics.Percentile(times, .95)), duration(metrics.Percentile(first, .5)))
 	if t.UsageReported > 0 {
 		detail += fmt.Sprintf("Input %s · cached %s\nOutput %s · reasoning %s\nReasoning is included in output.\n", number(t.Tokens.Input), number(t.Tokens.Cached), number(t.Tokens.Output), number(t.Tokens.Reasoning))
 	}

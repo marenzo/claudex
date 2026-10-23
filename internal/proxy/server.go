@@ -45,6 +45,12 @@ type Server struct {
 	instance        string
 	shutdown        chan struct{}
 	stopOnce        sync.Once
+	traceSequence   atomic.Uint64
+	reviewCache     reviewCacheTracker
+}
+
+func (s *Server) nextTraceID() string {
+	return s.instance + "-" + strconv.FormatUint(s.traceSequence.Add(1), 10)
 }
 
 func New(cfg config.Config, client *codex.Client, version string) (*Server, error) {
@@ -203,10 +209,10 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	status := 200
 	errorType := ""
 	model := cfg.Model
-	record := metrics.Request{Started: started, Model: model}
+	record := metrics.Request{Started: started, Model: model, Role: metrics.Generation, TraceID: s.nextTraceID()}
 	errorSecrets := []string{string(s.key), cfg.AuthFile, cfg.ClientKeyFile}
 	if s.metrics != nil {
-		s.metrics.Begin()
+		s.metrics.Begin(metrics.Generation)
 	}
 	defer func() {
 		record.Status, record.Model, record.DurationMS = status, model, time.Since(started).Milliseconds()
@@ -218,7 +224,16 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 			record.Error = redactErrorDetails(record.Error, errorSecrets)
 			s.metrics.Finish(record)
 		}
-		attrs := []any{"status", status, "duration_ms", record.DurationMS, "model", model}
+		attrs := []any{"trace_id", record.TraceID, "role", record.Role, "status", status, "duration_ms", record.DurationMS, "model", model}
+		if record.UpstreamFirstOutputMS != nil {
+			attrs = append(attrs, "upstream_first_output_ms", *record.UpstreamFirstOutputMS)
+		}
+		if record.ClientFirstOutputMS != nil {
+			attrs = append(attrs, "client_first_output_ms", *record.ClientFirstOutputMS)
+		}
+		if record.ReviewMS != nil {
+			attrs = append(attrs, "review_ms", *record.ReviewMS)
+		}
 		if status >= 400 {
 			if errorType == "" && record.Error != nil {
 				errorType = record.Error.Type
@@ -262,6 +277,9 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		record.ErrorKind = "classifier_context"
 		fail(&apiError{Status: 400, Type: "invalid_request_error", Message: errReview.Error()})
 		return
+	}
+	if review != nil {
+		review.parentTraceID = record.TraceID
 	}
 	body, session, errPrepare := prepareRequest(raw, cfg)
 	if errPrepare != nil {

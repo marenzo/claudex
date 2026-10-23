@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const APIVersion = 1
+const APIVersion = 2
 
 type Preferences struct {
 	Model         string `json:"model"`

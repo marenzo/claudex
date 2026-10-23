@@ -35,10 +35,11 @@ func fixtureModel() *model {
 		if i%31 == 0 {
 			status = 499
 		}
-		r := metrics.Request{ID: int64(240 - i), Started: now.Add(-time.Duration(i)*time.Second*18 - time.Duration(d)*time.Millisecond), Completed: now.Add(-time.Duration(i) * time.Second * 18), Model: ids[i%len(ids)], Effort: "high", Status: status, DurationMS: d, FirstOutputMS: &f, UsageReported: status == 200, Usage: metrics.Usage{Input: int64(12000 + i*813), Cached: int64(9000 + i*600), Output: int64(700 + i*73), Reasoning: int64(200 + i*31)}}
+		r := metrics.Request{Role: metrics.Generation, ID: int64(240 - i), Started: now.Add(-time.Duration(i)*time.Second*18 - time.Duration(d)*time.Millisecond), Completed: now.Add(-time.Duration(i) * time.Second * 18), Model: ids[i%len(ids)], Effort: "high", Status: status, DurationMS: d, UpstreamFirstOutputMS: &f, ClientFirstOutputMS: &f, UsageReported: status == 200, Usage: metrics.Usage{Input: int64(12000 + i*813), Cached: int64(9000 + i*600), Output: int64(700 + i*73), Reasoning: int64(200 + i*31)}}
 		if !r.UsageReported {
 			r.Usage = metrics.Usage{}
-			r.FirstOutputMS = nil
+			r.UpstreamFirstOutputMS = nil
+			r.ClientFirstOutputMS = nil
 		}
 		if status == 429 {
 			r.Error = &metrics.ErrorDetails{Source: "upstream", Type: "rate_limit_error", Status: 429, Message: "The upstream service is temporarily at capacity. Try again shortly."}
@@ -46,6 +47,7 @@ func fixtureModel() *model {
 		m.snapshot.Recent = append(m.snapshot.Recent, r)
 	}
 	m.snapshot.Totals = totalsFor(m.snapshot.Recent)
+	m.snapshot.Roles = map[metrics.Role]metrics.RoleSummary{metrics.Generation: {Active: m.snapshot.Active, Totals: m.snapshot.Totals, Models: m.snapshot.Models}}
 	for _, id := range ids {
 		var rows []metrics.Request
 		for _, r := range m.snapshot.Recent {
@@ -63,7 +65,7 @@ func fixtureModel() *model {
 				rows = append(rows, r)
 			}
 		}
-		m.snapshot.History = append(m.snapshot.History, metrics.Bucket{Time: at, Totals: totalsFor(rows)})
+		m.snapshot.History = append(m.snapshot.History, metrics.Bucket{Time: at, Totals: totalsFor(rows), Roles: map[metrics.Role]metrics.Totals{metrics.Generation: totalsFor(rows)}})
 	}
 	m.selected = 239
 	return m

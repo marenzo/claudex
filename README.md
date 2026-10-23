@@ -16,7 +16,7 @@ providers' terms and subscription limits still apply.
   separate GPT command reviewer. Server-side review is experimental and opt-in;
   see [Auto Mode](docs/auto-mode.md).
 - **Prompt caching.** Stable session routing and request prefixes support Codex
-  prompt-cache reuse. The TUI shows reported cached-input tokens and reuse rates;
+  prompt-cache reuse. The TUI separates generation and reviewer cache usage;
   cache hits depend on the upstream service. See
   [prompt caching](docs/prompt-caching.md).
 - **Model and reasoning controls.** Choose the five supported Sol, Terra, Luna,
@@ -79,6 +79,11 @@ searchable request records. Wide terminals show the request table and inspector
 side by side; smaller terminals use focused views. Colors follow the terminal's
 light or dark background. Press **1–4** to switch views, **Tab** to focus a pane,
 **Ctrl+k** for commands, or **?** for shortcuts.
+
+Monitoring starts with generation requests. Press **g** to switch between
+generation, Auto reviews, and all upstream calls. The inspector links reviews to
+their generation request and separates model output, review time, and the first
+content delivered to Claude Code.
 
 The Settings view changes model, effort, command reviewer, and conversation-size
 preferences. Valid changes save and apply without interrupting requests; new

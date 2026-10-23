@@ -144,6 +144,10 @@ func (m *model) click(msg tea.MouseClickMsg) tea.Cmd {
 	ox, oy := m.contentOrigin()
 	if y == 4 {
 		w, _, _ := m.dimensions()
+		if m.tab != 3 && x >= ox+m.roleChipX && x < ox+m.roleChipX+m.roleChipW {
+			_, cmd := m.Update(keyPress('g'))
+			return cmd
+		}
 		if m.tab == 1 && x >= ox+w-17 {
 			_, cmd := m.Update(keyPress('x'))
 			return cmd
@@ -208,7 +212,7 @@ func (m *model) commands() []command {
 	if m.paused {
 		pause = "Resume updates"
 	}
-	all := []command{{"Overview", "1"}, {"Requests", "2"}, {"Models", "3"}, {"Settings", "4"}, {pause, "p"}, {"Change chart time range", "w"}, {"Search requests", "search"}, {"Clear request filters", "clear"}, {"Save settings", "save"}, {"Discard settings draft", "discard"}, {"Keyboard shortcuts", "?"}, {"Quit", "q"}}
+	all := []command{{"Overview", "1"}, {"Requests", "2"}, {"Models", "3"}, {"Settings", "4"}, {pause, "p"}, {"Change call type: generation / reviews / all", "g"}, {"Change chart time range", "w"}, {"Search requests", "search"}, {"Clear request filters", "clear"}, {"Save settings", "save"}, {"Discard settings draft", "discard"}, {"Keyboard shortcuts", "?"}, {"Quit", "q"}}
 	query := strings.ToLower(m.input.Value())
 	var out []command
 	for _, c := range all {
@@ -309,7 +313,7 @@ func (m *model) overlay(base string) string {
 	w := max(4, min(m.width-4, 68))
 	h := max(3, min(m.height-4, 20))
 	title := "Keyboard shortcuts"
-	content := "1–4       Overview / Requests / Models / Settings\nTab       Focus next pane or chart\n↑↓ / j k  Select a request, model or settings field\nPgUp/PgDn Scroll details and settings\nEnter     Open request / edit setting / minute requests\nEsc       Back or close\n\n/         Search requests\nm / e / f Filter model / effort / outcome\no / x     Sort / clear request filters\nw / z     Chart time range / expand focused chart\np         Pause or resume updates\nCtrl+s    Save settings     d  Discard settings\nCtrl+k    Search commands\nq         Quit\n\nPress Esc to close"
+	content := "1–4       Overview / Requests / Models / Settings\nTab       Focus next pane or chart\n↑↓ / j k  Select a request, model or settings field\nPgUp/PgDn Scroll details and settings\nEnter     Open request / edit setting / minute requests\nEsc       Back or close\n\n/         Search requests\ng         Generation / auto reviews / all calls\nm / e / f Filter model / effort / outcome\no / x     Sort / clear request filters\nw / z     Chart time range / expand focused chart\np         Pause or resume updates\nCtrl+s    Save settings     d  Discard settings\nCtrl+k    Search commands\nq         Quit\n\nPress Esc to close"
 	if m.modal == "quit" {
 		title = "Unsaved settings"
 		h = min(h, 8)

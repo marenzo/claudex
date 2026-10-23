@@ -104,7 +104,14 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 		if _, errWrite := w.Write(data); errWrite != nil {
 			return false
 		}
-		return http.NewResponseController(w).Flush() == nil
+		if http.NewResponseController(w).Flush() != nil {
+			return false
+		}
+		if record.ClientFirstOutputMS == nil && hasClientOutput(data) {
+			elapsed := time.Since(record.Started).Milliseconds()
+			record.ClientFirstOutputMS = &elapsed
+		}
+		return true
 	}
 	fail := func(e *apiError) int {
 		if ctx.Err() != nil {
@@ -146,6 +153,10 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 		return fail(e)
 	}
 	finishReview := func() ([]any, int) {
+		started := time.Now()
+		if len(review.calls) > 0 {
+			defer func() { elapsed := time.Since(started).Milliseconds(); record.ReviewMS = &elapsed }()
+		}
 		type outcome struct {
 			verdicts map[string]toolVerdict
 			err      error
@@ -257,9 +268,9 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			kind := e.Get("type").String()
 			if HasMeaningfulCodexOutputDelta(event.data) {
 				sawOutputDelta = true
-				if record.FirstOutputMS == nil {
+				if record.UpstreamFirstOutputMS == nil {
 					elapsed := time.Since(record.Started).Milliseconds()
-					record.FirstOutputMS = &elapsed
+					record.UpstreamFirstOutputMS = &elapsed
 				}
 			}
 			if usage := e.Get("response.usage"); usage.Get("input_tokens").Type == gjson.Number && usage.Get("output_tokens").Type == gjson.Number {
@@ -339,6 +350,10 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 					if _, errWrite := w.Write(result); errWrite != nil {
 						return 499
 					}
+					if hasMessageOutput(result) {
+						elapsed := time.Since(record.Started).Milliseconds()
+						record.ClientFirstOutputMS = &elapsed
+					}
 					return 200
 				}
 			}
@@ -376,6 +391,41 @@ func (s *Server) consume(w http.ResponseWriter, r *http.Request, body io.Reader,
 			}
 		}
 	}
+}
+
+// Pings, message_start, usage and empty blocks are not output. Count only
+// translated content actually flushed to the client, including complete tool
+// blocks whose upstream emits no argument delta.
+func hasClientOutput(data []byte) bool {
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if !bytes.HasPrefix(line, []byte("data:")) {
+			continue
+		}
+		e := gjson.ParseBytes(bytes.TrimSpace(line[5:]))
+		switch e.Get("type").String() {
+		case "content_block_delta":
+			for _, key := range []string{"text", "thinking", "partial_json"} {
+				if e.Get("delta."+key).String() != "" {
+					return true
+				}
+			}
+		case "content_block_start":
+			part := e.Get("content_block")
+			if part.Get("text").String() != "" || part.Get("thinking").String() != "" || part.Get("type").String() == "tool_use" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasMessageOutput(data []byte) bool {
+	for _, part := range gjson.GetBytes(data, "content").Array() {
+		if part.Get("text").String() != "" || part.Get("thinking").String() != "" || part.Get("type").String() == "tool_use" {
+			return true
+		}
+	}
+	return false
 }
 
 // Codex can send complete items separately and leave response.output empty.

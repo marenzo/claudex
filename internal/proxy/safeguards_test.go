@@ -51,8 +51,9 @@ func TestSafeguardsStreamAndJSON(t *testing.T) {
 						t.Error("classifier missing isolated cache affinity")
 					}
 					input := gjson.GetBytes(body, "input").Array()
-					payload := input[len(input)-1].Get("content.0.text").String()
-					if gjson.Get(payload, "assistant_tool_uses.0.id").String() != "toolu_test" || gjson.Get(payload, "assistant_tool_uses.0.input.command").String() != "printf SAFE_PROBE" || gjson.Get(input[0].Get("content.0.text").String(), "classifier_context.v").Int() != 1 {
+					payload := input[len(input)-2].Get("content.0.text").String()
+					context := input[len(input)-1].Get("content.0.text").String()
+					if gjson.Get(payload, "assistant_tool_uses.0.id").String() != "toolu_test" || gjson.Get(payload, "assistant_tool_uses.0.input.command").String() != "printf SAFE_PROBE" || gjson.Get(context, "classifier_context.v").Int() != 1 || input[len(input)-1].Get("role").String() != "developer" {
 						t.Errorf("classifier payload: %s", payload)
 					}
 					return upstreamResponse(200, classifierResponse(`{"verdicts":[{"id":"toolu_test","outcome":"`+outcome+`","explanation":"Fixture review"}]}`)), nil
@@ -97,17 +98,17 @@ func TestClassifierEvidencePreservesHistoryAndFreshPermissions(t *testing.T) {
 	payload["tool_uses"] = json.RawMessage(`[{"id":"second","name":"Read","input":{"file_path":"/fixture/a"}}]`)
 	after, _ := json.Marshal(classifierEvidence(payload))
 	oldInput, newInput := gjson.ParseBytes(before).Array(), gjson.ParseBytes(after).Array()
-	for i, message := range oldInput {
+	for i, message := range oldInput[:len(oldInput)-1] {
 		if message.Raw != newInput[i].Raw {
-			t.Fatal("previous proposed-batch cache endpoint lost from history")
+			t.Fatal("unchanged historical evidence prefix lost")
 		}
 	}
-	for _, message := range newInput {
+	for _, message := range newInput[:len(newInput)-1] {
 		if message.Get("role").String() != "user" {
 			t.Fatal("untrusted transcript promoted to reviewer role")
 		}
 	}
-	last := gjson.Parse(newInput[len(newInput)-1].Get("content.0.text").String())
+	last := gjson.Parse(newInput[len(newInput)-2].Get("content.0.text").String())
 	if last.Get("assistant_tool_uses.0.id").String() != "second" {
 		t.Fatal("fresh proposed batch missing")
 	}
@@ -116,10 +117,19 @@ func TestClassifierEvidencePreservesHistoryAndFreshPermissions(t *testing.T) {
 	}
 	payload["classifier_context"], _ = sjson.SetBytes(payload["classifier_context"], "rules.deny", []string{"Read(/fixture/a)"})
 	changed, _ := json.Marshal(classifierEvidence(payload))
-	fresh := gjson.ParseBytes(changed).Array()[0]
+	changedInput := gjson.ParseBytes(changed).Array()
+	fresh := changedInput[len(changedInput)-1]
 	context := gjson.Parse(fresh.Get("content.0.text").String())
-	if fresh.Raw == oldInput[0].Raw || context.Get("classifier_context.rules.deny.0").String() != "Read(/fixture/a)" || context.Get("tools.0.name").String() != "Read" {
+	if context.Get("classifier_context.rules.deny.0").String() != "Read(/fixture/a)" || context.Get("assistant_tool_uses").Exists() || context.Get("current_review").Bool() != true || fresh.Get("role").String() != "developer" {
 		t.Fatal("fresh permissions or tool definitions missing")
+	}
+	for i := range changedInput[:len(changedInput)-1] {
+		if changedInput[i].Raw != newInput[i].Raw {
+			t.Fatal("permission change rewrote stable history")
+		}
+	}
+	if gjson.Get(changedInput[0].Get("content.0.text").String(), "tools.0.name").String() != "Read" {
+		t.Fatal("current tool definitions missing")
 	}
 }
 

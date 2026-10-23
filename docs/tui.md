@@ -20,6 +20,9 @@ generation, auto-mode review, and conversation-size controls.
 - **Tab / Shift-Tab:** focus the next or previous pane; on Overview, select a chart.
 - **Ctrl+k** or **:** open the searchable command palette. **?** opens keyboard help.
 - **w:** cycle 15-minute, one-hour, and two-hour chart windows.
+- **g:** switch generation, Auto reviews, or all upstream calls in Overview,
+  Requests, and Models. Generation is selected initially; the call type stays
+  selected when switching views.
 - **p:** pause/resume updates. An open TUI keeps its gateway session attached.
 - **q:** quit. Unsaved settings open a discard confirmation; Esc keeps the draft.
 - **PgUp / PgDn**, mouse wheel: scroll the focused pane or page through requests.
@@ -39,11 +42,17 @@ spacing and row separators; shorter terminals show more compact rows.
 - Arrows or **j/k** select a row; Enter focuses details; Esc returns to the list.
 - **/** searches; **m** cycles models; **e** cycles effort; **f** cycles outcomes.
 - **o** sorts by newest completion, longest duration, or highest input-cache reuse.
-- **x** clears every filter, including a selected minute.
+- **x** clears request filters, including a selected minute, within the selected
+  call type. **g** changes the call type.
 - The inspector shows a response timeline, input and output breakdowns, timestamps,
   and any retained error excerpt. Tab focuses the inspector for scrolling.
 - Selection stays attached to the request ID during live updates. If that record
   leaves the bounded history or no longer matches, selection moves to a visible row.
+
+Wide tables label each call's type. A successful review can block a proposed
+tool; the row shows the blocked count instead of treating that verdict as a
+gateway error. Review details include proposed/blocked tool counts and the parent
+generation trace. Search a trace to find its related retained records.
 
 **Models** shows the five supported models. Arrows choose a model; Tab focuses its
 statistics for scrolling. Lifetime totals and time-window response statistics are
@@ -69,7 +78,11 @@ See [prompt caching](prompt-caching.md) for how reuse is routed and measured, an
 - Metrics responses are marked `no-store`. The TUI uses no external assets, browser, or analytics.
 - The gateway keeps the latest 500 completed requests in memory. Each record holds
   request metadata, token usage, and a bounded error excerpt for failures.
-- Prompts, replies, and tool payloads are never retained.
+- Prompts, replies, and tool payloads are never retained in monitoring history.
+  Review cache comparisons keep only keyed fingerprints and counts, bounded to
+  32 groups, 256 evidence-message boundaries, and one complete cache endpoint
+  fingerprint per group. Their random private key resets with the process,
+  preventing fingerprint comparisons across runs.
 - Error excerpts have known credentials and common token, account, and email
   patterns redacted. An upstream error can still echo input fragments that pattern
   redaction misses. Review excerpts before sharing them.
@@ -88,8 +101,9 @@ only to dashboard requests. They do not limit inference duration.
 
 ## What is measured
 
-- **Totals.** Process totals and per-model totals include all completed
-  `/v1/messages` requests since start. In-flight requests are counted separately.
+- **Totals.** Generation totals include completed `/v1/messages` requests. Auto
+  reviews have separate lifetime, model, minute, and in-flight counters. All calls
+  combines both; a reviewed generation contributes one record to each group.
   Dashboard polling and token-count requests do not affect these totals.
 - **Cancellations.** Client cancellations use status 499. They have their own
   `canceled` count in process, model, and minute totals. They stay in
@@ -108,10 +122,18 @@ only to dashboard requests. They do not limit inference duration.
   selected time window. They include failures and cancellations. Percentiles use
   the nearest-rank definition. A cancellation timing does not mean the server
   finished a response.
-- **Durations.** Full duration runs from entry into the messages handler through
-  completion. **First output** is the time to the first meaningful upstream delta:
-  text, reasoning, or tool arguments. It is not always the time to visible text.
-  A request without such a delta has no first-output value, rather than a zero.
+- **Durations.** Generation duration runs from entry into the messages handler
+  through completion and includes Auto review. Review duration includes waiting
+  for a reviewer slot and the model response. These durations overlap, so do not
+  add them to calculate a response's waiting time.
+- **Output timing.** **First from model** measures the first meaningful upstream
+  delta: text, reasoning, or tool arguments. **First to client** measures the first
+  translated content successfully written and, for streams, flushed to Claude
+  Code. It excludes pings, headers, usage events and empty blocks. Content can be
+  reasoning or tool data before text. Reviewed responses remain buffered until a
+  decision, so client timing includes the review delay. Table and chart first-output
+  statistics use client timing. Reviews have no client-output timing. Missing
+  values remain unavailable, rather than zero.
 - **Usage.** Usage exists only when the upstream reports numeric input and output
   counts. Cached input is part of input, and reasoning is part of output. Cache
   reuse is cached input divided by total reported input. It is not a per-request
@@ -121,6 +143,7 @@ only to dashboard requests. They do not limit inference duration.
 - **Quota recoveries.** This counts positive availability probes that cleared a
   cooldown. It is not a balance, a reset countdown, or a retry count.
 - **Request records.** Request IDs are process-local completion sequence numbers.
+  Each call also has a unique trace; reviews carry their parent generation trace.
   Optional error kinds are static transport categories. A failed request keeps an
   error excerpt with source (`upstream`, `proxy`, or `transport`), type, code, message,
   and upstream HTTP status when available. An HTTP 200 SSE response can still end
@@ -136,6 +159,10 @@ Minute history and the request ring expire independently. The request log filter
 all retained records, regardless of the charts' time range. Date labels use the
 terminal host's local time. Wire timestamps are RFC3339, and bucket calculations use
 absolute timestamps.
+
+The private control/metrics API is version 2. Update the CLI and gateway together;
+there are no aliases for the old `first_output_ms` metric. The Anthropic-compatible
+`/v1/messages` interface is unchanged.
 
 ## Configuration
 

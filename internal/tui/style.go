@@ -179,6 +179,12 @@ func (m *model) pageHead(w int) string {
 		}
 		controls = m.chip(label, m.dirty)
 	}
+	if m.tab != 3 {
+		chip := m.chip("g "+roleLabel(m.role), true)
+		controls = chip + " " + controls
+		m.roleChipX, m.roleChipW = w-ansi.StringWidth(controls), ansi.StringWidth(chip)
+		subtitle = roleLabel(m.role) + " · " + subtitle
+	}
 	return fit(pair(strong(tabs[m.tab], p.text), controls, w)+"\n"+ink(subtitle, p.dim)+"\n", w, 3)
 }
 func (m *model) chrome() (string, string) {
@@ -230,11 +236,11 @@ func (m *model) chrome() (string, string) {
 	help := "1–4 views   Tab focus   Ctrl+k commands   ? help   q quit"
 	switch m.tab {
 	case 0:
-		help = "Tab focus   z expand   ←→ minute   Enter inspect   ? help"
+		help = "g call type   Tab focus   z expand   ←→ minute   Enter inspect   ? help"
 	case 1:
-		help = "↑↓ select   Enter inspect   / find   f outcome   ? help"
+		help = "g call type   ↑↓ select   Enter inspect   / find   f outcome   ? help"
 	case 2:
-		help = "↑↓ model   Tab focus   w time range   ? help"
+		help = "g call type   ↑↓ model   Tab focus   w time range   ? help"
 	case 3:
 		help = "↑↓ field   ←→ choose   Enter edit   Ctrl+s save   ? help"
 	}

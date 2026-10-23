@@ -63,6 +63,7 @@ type model struct {
 	dirty, editing, searching, paused, saving, confirmQuit bool
 	stale, notice                                          string
 	filter                                                 metrics.Filter
+	role                                                   metrics.Role
 	selected                                               int64
 	expanded                                               bool
 	generation                                             int
@@ -72,12 +73,13 @@ type model struct {
 	minuteFilter                                           time.Time
 	body                                                   string
 	hits                                                   []hit
+	roleChipX, roleChipW                                   int
 	modal                                                  string
 	commandIndex                                           int
 }
 
 func newModel(ctx context.Context, c *control.Client, settings bool) *model {
-	m := &model{ctx: ctx, c: c, width: 80, height: 24, minutes: 60, view: viewport.New(), side: viewport.New(), input: textinput.New()}
+	m := &model{ctx: ctx, c: c, width: 80, height: 24, minutes: 60, role: metrics.Generation, view: viewport.New(), side: viewport.New(), input: textinput.New()}
 	if settings {
 		m.tab = 3
 	}
@@ -306,6 +308,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.minutes = 15
 			}
 			m.minute = 0
+		case "g":
+			if m.tab != 3 {
+				m.role = metrics.Role(cycle([]string{string(metrics.Generation), string(metrics.Review), ""}, string(m.role), 1))
+				m.selected = 0
+				m.view.GotoTop()
+			}
 		case "z":
 			if m.tab == 0 {
 				m.zoom = !m.zoom
@@ -372,7 +380,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab == 3 && m.focus == 0 && !m.saving && m.settings.Writable {
 				m.cycleField(direction)
 			} else if m.tab == 0 {
-				m.minute = max(0, min(len(metrics.Window(m.snapshot, m.minutes).History)-1, m.minute+direction))
+				m.minute = max(0, min(len(metrics.Window(m.scopedSnapshot(), m.minutes).History)-1, m.minute+direction))
 			}
 		case "enter":
 			if m.tab == 1 {
@@ -384,7 +392,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.view.GotoTop()
 			} else if m.tab == 0 {
-				history := metrics.Window(m.snapshot, m.minutes).History
+				history := metrics.Window(m.scopedSnapshot(), m.minutes).History
 				if len(history) > 0 {
 					m.minuteFilter = history[min(m.minute, len(history)-1)].Time
 					m.changeTab(1)
@@ -510,7 +518,7 @@ func (m *model) cycleField(direction int) {
 }
 func (m *model) records() []metrics.Request {
 	var out []metrics.Request
-	for _, r := range m.snapshot.Recent {
+	for _, r := range m.scopedSnapshot().Recent {
 		if m.filter.Match(r) && (m.minuteFilter.IsZero() || r.Completed.Truncate(time.Minute).Equal(m.minuteFilter)) {
 			out = append(out, r)
 		}

@@ -40,8 +40,8 @@ func Window(snapshot Snapshot, minutes int) Sample {
 		}
 		s.Records = append(s.Records, r)
 		durations = append(durations, r.DurationMS)
-		if r.FirstOutputMS != nil {
-			first = append(first, *r.FirstOutputMS)
+		if r.ClientFirstOutputMS != nil {
+			first = append(first, *r.ClientFirstOutputMS)
 		}
 		for i, b := range bounds {
 			if r.DurationMS <= b {
@@ -97,7 +97,7 @@ func (f Filter) Match(r Request) bool {
 	if r.Error != nil {
 		details = r.Error.Source + " " + r.Error.Type + " " + r.Error.Code + " " + r.Error.Message + " " + formatID(int64(r.Error.Status))
 	}
-	return strings.Contains(normalize(r.Model+" "+r.Effort+" "+r.ErrorKind+" "+details+" "+formatID(r.ID)+" "+formatID(int64(r.Status))), normalize(f.Search))
+	return strings.Contains(normalize(string(r.Role)+" "+r.TraceID+" "+r.ParentTraceID+" "+r.Model+" "+r.Effort+" "+r.ErrorKind+" "+details+" "+formatID(r.ID)+" "+formatID(int64(r.Status))), normalize(f.Search))
 }
 func normalize(s string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), "_", " "))
