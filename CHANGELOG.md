@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v1.2.1 — 2026-10-23
+
+- Update all out-of-date application Go dependencies, including GJSON 1.20.0,
+  tokenizer 0.10.0, regexp2 2.9.1, and terminal support packages; refresh notices.
+- Update govulncheck to 1.9.0 and official Go/Alpine container image digests.
+  Use Alpine 3.24.3 for the gateway and Node 26.12.1 on Debian Trixie for the
+  test harness, with npm 12.2.1 and Claude Code 2.1.309 pinned explicitly.
+
 ## v1.2.0 — 2026-10-23
 
 - Publish verified Linux and macOS archives automatically after successful main

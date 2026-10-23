@@ -7,7 +7,7 @@ GOARCH ?= $(shell go env GOARCH)
 ARCHIVE ?= dist/claudex-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
 IMAGE ?= claudex:local
 STATICCHECK_VERSION ?= v0.8.2
-GOVULNCHECK_VERSION ?= v1.8.0
+GOVULNCHECK_VERSION ?= v1.9.0
 GITLEAKS_VERSION ?= v8.30.1
 PREFIX ?= $(HOME)/.local
 

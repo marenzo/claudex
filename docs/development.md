@@ -18,7 +18,7 @@ Cross-build with `GOOS=linux GOARCH=arm64 make build`. Output always goes to
 `dist/claudex`. Override `VERSION`, `COMMIT`, or `BUILD_DATE` for a reproducible
 build stamp. The binary does not depend on the source checkout at runtime.
 
-`make lint` runs gitleaks v8.30.1, staticcheck v0.8.2, and govulncheck v1.8.0. It
+`make lint` runs gitleaks v8.30.1, staticcheck v0.8.2, and govulncheck v1.9.0. It
 downloads the pinned tools, so it needs network access. Override
 `GITLEAKS_VERSION`, `STATICCHECK_VERSION`, or `GOVULNCHECK_VERSION` to use another
 version. gitleaks scans every commit reachable from the checkout, so CI fetches
@@ -69,7 +69,9 @@ configuration, credentials, conversation captures, or generated binaries.
 ## End-to-end harness test
 
 `make e2e` builds a minimal Docker image with the Claude Code CLI and the gateway.
-It mounts a private copy of your Codex sign-in and client key, found through
+The harness pins Node 26.12.1, npm 12.2.1, and Claude Code 2.1.309; Docker base
+images are pinned by digest. It mounts a private copy of your Codex sign-in and
+client key, found through
 `~/.config/claudex/config.json`. Set `CLAUDEX_E2E_CONFIG` to use another config.
 
 The test drives one resumed Claude Code session through 18 prompts. They cover:

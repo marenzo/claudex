@@ -207,7 +207,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/charmbracelet/ultraviolet@v0.0.0-20261008173134-6b8d4baf91b4 — LICENSE
+## github.com/charmbracelet/ultraviolet@v0.0.0-20261023060817-a45b7c86333f — LICENSE
 
 ```text
 MIT License
@@ -389,7 +389,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/dlclark/regexp2/v2@v2.8.0 — LICENSE
+## github.com/dlclark/regexp2/v2@v2.9.1 — LICENSE
 
 ```text
 The MIT License (MIT)
@@ -427,7 +427,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## github.com/mattn/go-runewidth@v0.0.30 — LICENSE
+## github.com/mattn/go-runewidth@v0.0.31 — LICENSE
 
 ```text
 The MIT License (MIT)
@@ -505,7 +505,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/tidwall/gjson@v1.19.0 — LICENSE
+## github.com/tidwall/gjson@v1.20.0 — LICENSE
 
 ```text
 The MIT License (MIT)
@@ -555,7 +555,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## github.com/tidwall/pretty@v1.2.1 — LICENSE
+## github.com/tidwall/pretty@v1.2.2 — LICENSE
 
 ```text
 The MIT License (MIT)
@@ -605,7 +605,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## github.com/tiktoken-go/tokenizer@v0.8.1 — LICENSE
+## github.com/tiktoken-go/tokenizer@v0.10.0 — LICENSE
 
 ```text
 MIT License
@@ -631,7 +631,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/xo/terminfo@v1.0.0 — LICENSE
+## github.com/xo/terminfo@v1.2.0 — LICENSE
 
 ```text
 The MIT License (MIT)
@@ -657,7 +657,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## golang.org/x/sync@v0.22.0 — LICENSE
+## golang.org/x/sync@v0.24.0 — LICENSE
 
 ```text
 Copyright 2009 The Go Authors.
@@ -689,7 +689,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## golang.org/x/sys@v0.47.0 — LICENSE
+## golang.org/x/sys@v0.49.0 — LICENSE
 
 ```text
 Copyright 2009 The Go Authors.

@@ -1,4 +1,4 @@
-FROM golang:1.27.3-alpine@sha256:d530cf60723abf1ffae0cd16bb546b379ec0550d2f3815e5b16ed69dbc00fba4 AS build
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS build
 WORKDIR /source
 COPY go.mod go.sum ./
 RUN go mod download
@@ -8,7 +8,7 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o /claudex ./cmd/claudex
 
-FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
+FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 LABEL org.opencontainers.image.source="https://github.com/marenzo/claudex" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.description="Local gateway that runs Claude Code on GPT models through a Codex subscription"
