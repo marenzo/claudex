@@ -1,4 +1,4 @@
-# Running Claudex
+# Running claudex
 
 ## Portable binary
 
@@ -19,7 +19,7 @@ sign in, register a service, or run the gateway.
 `ctl setup` creates a private config, a random client key, and a Codex sign-in. It
 keeps an existing configuration and sign-in. Use `--login` to sign in again,
 `--no-browser` to print the URL, or `--no-login` to prepare configuration only.
-The browser callback must reach `127.0.0.1:1455` on the machine running Claudex.
+The browser callback must reach `127.0.0.1:1455` on the machine running claudex.
 
 The default config is `~/.config/claudex/config.json`. Set `CLAUDEX_CONFIG` to use
 another configuration when launching Claude. Control commands also accept

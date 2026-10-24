@@ -268,7 +268,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.control.admit() {
 		w.Header().Set("Retry-After", "1")
-		fail(&apiError{Status: 503, Type: "overloaded_error", Message: "Claudex is shutting down; retry shortly."})
+		fail(&apiError{Status: 503, Type: "overloaded_error", Message: "claudex is shutting down; retry shortly."})
 		return
 	}
 	defer s.control.finish()

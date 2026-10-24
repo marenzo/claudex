@@ -13,7 +13,7 @@ import (
 
 // The lock lives beside the credential because atomic replacement changes the
 // credential's inode. Keep this file in place: unlinking it would split ownership
-// between existing and newly opened lock descriptors. Claudex supports Unix hosts.
+// between existing and newly opened lock descriptors. claudex supports Unix hosts.
 func (s *Store) lock(ctx context.Context) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-<div id="claudex-studio" aria-label="Claudex terminal design proposal">
+<div id="claudex-studio" aria-label="claudex terminal design proposal">
   <style>
     #claudex-studio {
       --cx-bg: light-dark(#f7f6f2, #11131b);
@@ -190,7 +190,7 @@
     #claudex-studio .cx-focussed .cx-grid { grid-template-columns: minmax(0, 1fr); }
     @media (prefers-reduced-motion: no-preference) { #claudex-studio button { transition: background-color 100ms ease, color 100ms ease; } }
   </style>
-  <div class="cx-note">CLAUDEX / DESIGN STUDY <span aria-hidden="true">·</span> illustrative data</div>
+  <div class="cx-note">claudex / DESIGN STUDY <span aria-hidden="true">·</span> illustrative data</div>
   <span class="cx-measure" id="cx-measure" aria-hidden="true">0000000000</span>
   <div class="cx-terminal" id="cx-terminal"></div>
   <script>
@@ -238,10 +238,11 @@
     const recent = events.slice(-500).reverse();
     state.selected = recent.find(r=>r.status===200&&r.usage).id;
     const logo = [
-      '  ___ _      _   _   _ ___  _____  __',
-      ' / __| |    /_\\ | | | |   \\| __\\ \\/ /',
-      '| (__| |__ / _ \\| |_| | |) | _| >  <',
-      ' \\___|____/_/ \\_\\\\___/|___/|___/_/\\_\\'
+      "      _                 _",
+      "  ___| | __ _ _   _  __| | _____  __",
+      " / __| |/ _` | | | |/ _` |/ _ \\ \\/ /",
+      "| (__| | (_| | |_| | (_| |  __/>  <",
+      " \\___|_|\\__,_|\\__,_|\\__,_|\\___/_/\\_\\"
     ].join('\n');
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
     const fmt = n => n == null ? '—' : n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 10000 ? 1 : 0) + 'k' : String(n);
@@ -269,8 +270,8 @@
       const pages = ['Overview','Requests','Models','Settings'];
       const defaultName=models.find(m=>m[1]===state.saved.model)?.[0]||state.saved.model;
       const reviewerName=models.find(m=>m[1]===state.saved.reviewer)?.[0]||'Claude client';
-      const hero = design.logo === 'expanded' && state.page === 'Overview' && design.rows >= 44 ? `<div class="cx-hero"><pre class="cx-logo" role="img" aria-label="Claudex ASCII wordmark">${esc(logo)}</pre><div class="cx-hero-meta"><span>Running for</span><span>2h 14m</span><span>Default model</span><span>${esc(defaultName)} · ${esc(state.saved.effort)}</span><span>Command reviewer</span><span>${esc(reviewerName)} · high</span></div></div>` : '';
-      return `<div id="cx-app"><header class="cx-topline"><span><span class="cx-brand-small">[c/x] CLAUDEX</span><span class="cx-dim cx-hide-mini"> / request monitor</span></span><span class="cx-status"><span class="${state.paused ? 'cx-warn' : 'cx-ok'}">${state.paused ? 'Ⅱ Updates paused' : '● Connected'}</span><span>4 requests running · 3 terminals connected</span><span class="cx-dim cx-hide-mini">127.0.0.1:8317</span></span></header>${hero}<div class="cx-workspace"><nav class="cx-rail" aria-label="Claudex views"><div class="cx-rail-caption">WORKSPACE</div>${pages.map((page,i) => `<button type="button" class="cx-nav-button" data-page="${page}" ${page === state.page ? 'aria-current="page"' : ''}><span class="cx-dim">${i+1}</span> ${page}${page==='Settings' && dirty() ? ' •' : ''}</button>`).join('')}<div class="cx-rail-bottom"><div>Recent history</div><div>Last 500 requests<br>2 hours of charts</div><div>${button('commands','ctrl+k commands')}<br>${button('help','? help')}</div></div></nav><main class="cx-main ${state.focused ? 'cx-focussed' : ''}">${state.toast ? `<div class="cx-toast" role="status">${esc(state.toast)} ${button('dismiss','×','aria-label="Dismiss notice"')}</div>` : ''}${pageContent()}</main></div><footer class="cx-foot"><span>${state.page === 'Requests' ? '<span class="cx-key">↑↓</span> select  <span class="cx-key">Enter</span> inspect  <span class="cx-key">/</span> find' : state.page === 'Settings' ? '<span class="cx-key">Tab</span> field  <span class="cx-key">Ctrl+s</span> save  <span class="cx-key">Esc</span> back' : '<span class="cx-key">Tab</span> focus  <span class="cx-key">Enter</span> inspect  <span class="cx-key">z</span> expand'}</span><span><span class="cx-key">1–4</span> views  <span class="cx-key">Ctrl+k</span> commands  ${button('help','? help')}</span><span class="cx-dim">${columns} cols · ${state.paused ? 'snapshot paused' : 'updated 13:40:30'}</span></footer></div>${modalContent()}`;
+      const hero = design.logo === 'expanded' && state.page === 'Overview' && design.rows >= 44 ? `<div class="cx-hero"><pre class="cx-logo" role="img" aria-label="claudex ASCII wordmark">${esc(logo)}</pre><div class="cx-hero-meta"><span>Running for</span><span>2h 14m</span><span>Default model</span><span>${esc(defaultName)} · ${esc(state.saved.effort)}</span><span>Command reviewer</span><span>${esc(reviewerName)} · high</span></div></div>` : '';
+      return `<div id="cx-app"><header class="cx-topline"><span><span class="cx-brand-small">[c/x] claudex</span><span class="cx-dim cx-hide-mini"> / request monitor</span></span><span class="cx-status"><span class="${state.paused ? 'cx-warn' : 'cx-ok'}">${state.paused ? 'Ⅱ Updates paused' : '● Connected'}</span><span>4 requests running · 3 terminals connected</span><span class="cx-dim cx-hide-mini">127.0.0.1:8317</span></span></header>${hero}<div class="cx-workspace"><nav class="cx-rail" aria-label="claudex views"><div class="cx-rail-caption">WORKSPACE</div>${pages.map((page,i) => `<button type="button" class="cx-nav-button" data-page="${page}" ${page === state.page ? 'aria-current="page"' : ''}><span class="cx-dim">${i+1}</span> ${page}${page==='Settings' && dirty() ? ' •' : ''}</button>`).join('')}<div class="cx-rail-bottom"><div>Recent history</div><div>Last 500 requests<br>2 hours of charts</div><div>${button('commands','ctrl+k commands')}<br>${button('help','? help')}</div></div></nav><main class="cx-main ${state.focused ? 'cx-focussed' : ''}">${state.toast ? `<div class="cx-toast" role="status">${esc(state.toast)} ${button('dismiss','×','aria-label="Dismiss notice"')}</div>` : ''}${pageContent()}</main></div><footer class="cx-foot"><span>${state.page === 'Requests' ? '<span class="cx-key">↑↓</span> select  <span class="cx-key">Enter</span> inspect  <span class="cx-key">/</span> find' : state.page === 'Settings' ? '<span class="cx-key">Tab</span> field  <span class="cx-key">Ctrl+s</span> save  <span class="cx-key">Esc</span> back' : '<span class="cx-key">Tab</span> focus  <span class="cx-key">Enter</span> inspect  <span class="cx-key">z</span> expand'}</span><span><span class="cx-key">1–4</span> views  <span class="cx-key">Ctrl+k</span> commands  ${button('help','? help')}</span><span class="cx-dim">${columns} cols · ${state.paused ? 'snapshot paused' : 'updated 13:40:30'}</span></footer></div>${modalContent()}`;
     }
     function pageHead(title,sub,controls='') {
       return `<div class="cx-pagehead"><div><div class="cx-title">${title}</div><div class="cx-dim">${sub}</div></div><div class="cx-controls">${controls}</div></div>`;

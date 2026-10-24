@@ -67,7 +67,7 @@ func cmdFeedback(args []string) error {
 	if settings.Preferences.Feedback.Enabled {
 		state = "on"
 	}
-	fmt.Printf("Local feedback: %s. Anthropic feedback remains disabled in Claudex sessions.\n", state)
+	fmt.Printf("Local feedback: %s. Anthropic feedback remains disabled in claudex sessions.\n", state)
 	if action == "on" {
 		fmt.Println("Start a new Claude session to load ClaudexFeedback.")
 	}

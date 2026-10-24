@@ -1,6 +1,6 @@
 # Limitations and assumptions
 
-Claudex translates between two protocols. It cannot make their capabilities
+claudex translates between two protocols. It cannot make their capabilities
 identical.
 
 Auto mode can use Claude Code's client-side classifier or the opt-in
@@ -8,11 +8,11 @@ Auto mode can use Claude Code's client-side classifier or the opt-in
 Anthropic's no-charge classifier service; classification consumes Codex usage.
 
 - **Unofficial subscription integration.** OpenAI and Anthropic do not endorse
-  Claudex. Using a Codex subscription through a third-party client may breach
+  claudex. Using a Codex subscription through a third-party client may breach
   OpenAI's terms of use. The gateway presents itself upstream as the Codex CLI.
   Rate limits or account action are your risk. The Codex subscription endpoints and
   OAuth flow can change without notice. Model availability depends on the signed-in
-  account and upstream behavior. Claudex uses one account, with no API-key mode or
+  account and upstream behavior. claudex uses one account, with no API-key mode or
   account failover.
 - **Claude Code remains the harness.** Its UI, orchestration, automatic compaction,
   tools, and feature gates behave as in Claude Code. Ultra sends the model-specific effort (`xhigh` for Astra and
@@ -55,7 +55,7 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
 - **Quota recovery is conservative.** The once-a-minute read-only check clears a
   stale local cooldown only after positive evidence. It cannot bypass real
   subscription exhaustion. Cooldown state disappears on restart.
-- **Credentials need one owner.** Claudex instances coordinate through a credential
+- **Credentials need one owner.** claudex instances coordinate through a credential
   lock. Unrelated or older clients may ignore it. Do not run another client against
   the same refresh-token file at the same time. In containers, mount directories,
   not individual credential files.
@@ -82,7 +82,7 @@ logs `request rejected` with `reason` `invalid_client_key`. Use the value in
 a model your account can use. All requests share one subscription. You may need to
 wait for upstream quota to recover. Restarting does not create quota.
 
-**The server is overloaded.** Claudex translates explicit Codex overload errors to
+**The server is overloaded.** claudex translates explicit Codex overload errors to
 Claude's `overloaded_error`. Before response headers are sent, this is HTTP 529.
 During streaming, it is an error event. The dashboard keeps the original upstream
 status and error code. Overload does not start a quota cooldown. The gateway does

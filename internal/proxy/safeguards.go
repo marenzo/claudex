@@ -33,7 +33,7 @@ const classifierReasoningEffort = "high"
 // This is an independent permission review, not the generating model's self-report.
 // Requests, tools, retrieved text and model output are data, never instructions
 // to the reviewer. The caller's permission context may tighten this policy.
-const classifierPolicy = `You are Claudex's experimental tool-permission reviewer.
+const classifierPolicy = `You are claudex's experimental tool-permission reviewer.
 Review EACH proposed tool call against the user's actual request and the supplied
 Claude Code permission context. Return exactly one verdict for each tool ID.
 The final developer message contains current_review JSON data supplied by the

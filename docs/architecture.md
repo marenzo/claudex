@@ -1,12 +1,12 @@
-# How Claudex works
+# How claudex works
 
-Claudex translates Claude Code's Messages API traffic for a single Codex
+claudex translates Claude Code's Messages API traffic for a single Codex
 subscription account. It has no provider plugins, model downloads, generic OpenAI
 endpoints, or account load balancing.
 
 ```mermaid
 flowchart LR
-  Claude[Real Claude Code CLI] -->|Messages + client key| Gateway[Claudex]
+  Claude[Real Claude Code CLI] -->|Messages + client key| Gateway[claudex]
   Gateway -->|OAuth + Responses| Codex[Codex subscription]
   Codex -->|Response events| Gateway
   Gateway -->|Claude SSE / JSON| Claude
@@ -18,12 +18,12 @@ flowchart LR
 
 1. The launcher starts or reuses a gateway, derives active Claude settings, and
    injects the client key. Claude Code never receives the Codex sign-in token.
-2. Claudex authenticates the request and bounds its body. It resolves the requested
+2. claudex authenticates the request and bounds its body. It resolves the requested
    model and translates Claude system prompts, messages, and tools to Codex
    Responses input.
 3. The credential store rereads the Codex sign-in file and refreshes credentials
    shortly before they expire. It writes refreshed tokens atomically. A
-   cross-process file lock stops cooperating Claudex instances from racing the same
+   cross-process file lock stops cooperating claudex instances from racing the same
    refresh token. A transient refresh failure does not fail the request while the
    current access token is still valid.
 4. The fixed Codex transport sends the request to the subscription Responses
@@ -88,7 +88,7 @@ permission reviews, keep their admitted snapshot. Startup fields require a resta
 
 ## Reasoning and tools
 
-Claudex picks one GPT effort per request. It applies these rules in order:
+claudex picks one GPT effort per request. It applies these rules in order:
 
 | Claude request | Effort sent to GPT |
 | --- | --- |
@@ -102,7 +102,7 @@ Claudex picks one GPT effort per request. It applies these rules in order:
 | Larger `budget_tokens` | `xhigh` |
 | No effort and no budget | Configured default |
 
-Claudex then rewrites a few values:
+claudex then rewrites a few values:
 
 | Effort | Becomes |
 | --- | --- |
@@ -117,7 +117,7 @@ only `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. It rejects
 `ultra`.
 
 Codex's own Ultra setting is a client mode, not an API level. Upstream Codex 430a167 resolves it using each model's
-`multi_agent_reasoning_effort`, falling back to `max`. Max carries `max`. Under Claudex, Claude Code's ultracode workflow supplies the
+`multi_agent_reasoning_effort`, falling back to `max`. Max carries `max`. Under claudex, Claude Code's ultracode workflow supplies the
 delegation. The gateway does not implement Codex's multi-agent harness.
 
 Astra/6.1 Sol's `low` fallback for disabled thinking cannot promise zero reasoning.
@@ -126,7 +126,7 @@ for replay. Disabled thinking also hides visible summaries.
 
 Claude's WebSearch function and typed web-search declarations become Codex native
 `web_search`. The search-grounded answer returns as text, and URL annotations
-return as Markdown links. Claudex does not synthesize Anthropic `server_tool_use`
+return as Markdown links. claudex does not synthesize Anthropic `server_tool_use`
 or `web_search_tool_result` blocks. Those blocks cannot be resumed without
 `encrypted_content` issued by Anthropic. WebFetch and ordinary local tools still run
 in Claude Code. Artifact publishing is blocked because no subscription bridge for

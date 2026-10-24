@@ -31,7 +31,7 @@ type Credential struct {
 }
 
 // Store persists rotated tokens atomically. A sidecar file lock serializes
-// rotation and login across Claudex processes sharing the same credential path.
+// rotation and login across claudex processes sharing the same credential path.
 // Other applications must not write that credential without observing the lock.
 type Store struct {
 	Path     string

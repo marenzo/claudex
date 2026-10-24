@@ -159,7 +159,7 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	var s Status
 	err := c.JSON(ctx, "GET", "/_claudex/status", nil, "", &s)
 	if err == nil && (s.Product != "claudex" || s.API != APIVersion || s.Instance == "") {
-		err = errors.New("gateway control protocol mismatch; run the same Claudex version on both sides")
+		err = errors.New("gateway control protocol mismatch; run the same claudex version on both sides")
 	}
 	return s, err
 }

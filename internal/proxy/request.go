@@ -58,13 +58,13 @@ func prepareRequest(raw []byte, cfg config.Config) ([]byte, string, error) {
 			}
 			for _, caller := range callers.Array() {
 				if caller.Type != gjson.String || caller.String() != "direct" {
-					return nil, "", fmt.Errorf("programmatic allowed_callers are not supported by Claudex")
+					return nil, "", fmt.Errorf("programmatic allowed_callers are not supported by claudex")
 				}
 			}
 		}
 		kind := tool.Get("type").String()
 		if kind != "" && kind != "custom" && kind != "function" && kind != "web_search_20250305" && kind != "web_search_20260209" {
-			return nil, "", fmt.Errorf("input tag '%s' is not supported; Claudex supports client functions and web search", kind)
+			return nil, "", fmt.Errorf("input tag '%s' is not supported; claudex supports client functions and web search", kind)
 		}
 		if kind == "web_search_20250305" || kind == "web_search_20260209" || tool.Get("name").String() == "WebSearch" {
 			if tool.Get("max_uses").Exists() {

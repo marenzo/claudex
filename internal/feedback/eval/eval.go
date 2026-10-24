@@ -38,7 +38,7 @@ const System = "You are a coding assistant finishing a task. The user message su
 
 // Baseline isolates the added selection/attribution instructions, holding the
 // tool name, schema and scenario fixed. It is NOT the native Anthropic tool.
-const Baseline = "Record feedback about a product problem, a missing capability, or the model's own mistakes in this session. Saves the supplied observation to the local Claudex collector for later analysis. Nothing is sent to Anthropic."
+const Baseline = "Record feedback about a product problem, a missing capability, or the model's own mistakes in this session. Saves the supplied observation to the local claudex collector for later analysis. Nothing is sent to Anthropic."
 
 type Call struct {
 	Name      string          `json:"name"`

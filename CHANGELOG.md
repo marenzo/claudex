@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use lowercase `claudex` consistently in product text, terminal branding,
+  documentation, and release titles. Preserve the `ClaudexFeedback` tool name.
+
 ## v1.2.1 — 2026-10-23
 
 - Update all out-of-date application Go dependencies, including GJSON 1.20.0,

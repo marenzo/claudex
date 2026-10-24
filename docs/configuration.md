@@ -1,7 +1,7 @@
 # Configuration
 
 The default config is `~/.config/claudex/config.json`. `claudex ctl setup` creates it
-with a private random client key. Claudex rejects unknown config fields.
+with a private random client key. claudex rejects unknown config fields.
 [The example](../examples/config.json) uses Docker paths, so do not copy it
 unchanged into a native installation.
 
@@ -46,7 +46,7 @@ and Codex sign-in without regenerating either, update `client_key_file` and
 with any other process sharing the sign-in file and move its `.lock` sidecar while
 all users of that path are stopped. Keep the client key unchanged so existing
 clients can reconnect. This is a local file move, not a new sign-in or an automatic
-migration performed by Claudex. The two paths shown by the running TUI must match
+migration performed by claudex. The two paths shown by the running TUI must match
 the new locations after restart.
 
 ## Valid values
@@ -60,7 +60,7 @@ the new locations after restart.
 | `compact_window` | A positive integer below `context_window` |
 | `auto_mode_classifier_model` | Empty, or any supported model/alias |
 
-Model names are case-insensitive and may end in `[1m]`. Claudex rewrites the
+Model names are case-insensitive and may end in `[1m]`. claudex rewrites the
 loaded value to the canonical model ID.
 
 | Name | Model |
@@ -72,7 +72,7 @@ loaded value to the canonical model ID.
 | `terra` | `gpt-5.6-terra` |
 
 The model picker contains only these five models, plus Claude Code's Default row
-(which resolves to the configured model). Claudex replaces Claude Code's built-in
+(which resolves to the configured model). claudex replaces Claude Code's built-in
 lineup, so image models, other versions, and duplicate gateway/family rows are
 hidden. This applies only to Claude Code launched through `claudex`; ordinary
 Claude Code settings are unchanged. Restart the Claude Code process to reload the
@@ -139,7 +139,7 @@ non-loopback address. It logs a warning because the HTTP listener has no TLS.
 Run `claudex ctl --help` or a command's `--help` for its complete syntax.
 
 Usage mistakes exit with status 2; startup failures exit with status 1. Once
-Claude is running, Claudex propagates its exit status.
+Claude is running, claudex propagates its exit status.
 
 ## Launcher overrides
 
@@ -155,7 +155,7 @@ windows change the generated values.
 | `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_MODEL` | `gpt-6-astra` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION` | `gpt-6-astra` |
 | `ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` | `GPT-6 Astra (Codex subscription)` |
-| `ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION` | `Local Claudex proxy` |
+| `ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION` | `Local claudex proxy` |
 | `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `gpt-6-luna` |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `gpt-6-sol` |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | `gpt-6.1-sol` |

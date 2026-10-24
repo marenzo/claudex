@@ -5,7 +5,7 @@ labels: bug
 ---
 
 **Version and platform**
-Output of `claudex version`, OS, and how Claudex runs (foreground, macOS service, Docker).
+Output of `claudex version`, OS, and how claudex runs (foreground, macOS service, Docker).
 
 **What happened**
 Describe the trigger, the resulting behavior, and what you expected.

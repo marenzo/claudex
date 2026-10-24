@@ -1,11 +1,11 @@
-# Claudex
+# claudex
 
 Run the real Claude Code CLI with GPT models through your Codex subscription.
 One local Go binary translates Claude's Messages API into Codex's Responses API,
 launches Claude, and includes a terminal dashboard.
 
 You need Claude Code and a Codex subscription. No OpenAI API key is required.
-Claudex is an independent project, unaffiliated with Anthropic or OpenAI. Your
+claudex is an independent project, unaffiliated with Anthropic or OpenAI. Your
 providers' terms and subscription limits still apply.
 
 ## Core capabilities
@@ -39,7 +39,7 @@ contains `dist/claudex`. To build the current source instead, run `make build`.
 ./dist/claudex
 ```
 
-On first interactive use, Claudex creates its private configuration and client
+On first interactive use, claudex creates its private configuration and client
 key and opens Codex sign-in. It starts a temporary gateway and launches your
 installed Claude Code. There is no service registration, shell modification, or
 separate dashboard installation. You can run the downloaded binary directly.
@@ -50,7 +50,7 @@ Use another terminal to open the dashboard while the gateway is running:
 ./dist/claudex ctl
 ```
 
-The gateway is shared by concurrent Claudex sessions. It exits five seconds after
+The gateway is shared by concurrent claudex sessions. It exits five seconds after
 its last Claude or dashboard session disconnects and active requests finish.
 Open dashboard sessions keep it alive. Foreground and Homebrew-managed gateways
 remain running until stopped by their owner.

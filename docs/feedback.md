@@ -1,6 +1,6 @@
 # Local feedback
 
-Claudex disables Claude Code's native Anthropic feedback path in launched coding
+claudex disables Claude Code's native Anthropic feedback path in launched coding
 sessions. Opt-in `ClaudexFeedback` stores structured observations on the gateway
 machine for later triage. It does not submit reports to Anthropic, read transcripts,
 open issues, run an analysis worker, or authorize repairs.
@@ -31,10 +31,10 @@ Claude Code 2.1.309 calls the native tool `SendFeedback`; it queues drafts, with
 submission through a separate Anthropic feedback client rather than the ordinary
 inference base URL. The local collector replaces that path instead of redirecting it.
 These settings concern feedback, not every possible Claude Code network request.
-They apply to sessions started through Claudex; restart existing sessions to use them.
+They apply to sessions started through claudex; restart existing sessions to use them.
 
 When enabled, the launcher adds a session-only stdio MCP server named
-`claudex_feedback`, backed by the same Claudex executable. Its tool is
+`claudex_feedback`, backed by the same claudex executable. Its tool is
 `mcp__claudex_feedback__ClaudexFeedback`. It is loaded eagerly and allowed without
 an extra per-report permission prompt. User MCP files are not edited. The child
 receives the gateway URL, key-file path and a random launch ID; the key contents

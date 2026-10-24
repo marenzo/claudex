@@ -86,11 +86,11 @@ jobs:
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git tag -a "$VERSION" "$GITHUB_SHA" -m "Claudex $VERSION"
+            git tag -a "$VERSION" "$GITHUB_SHA" -m "claudex $VERSION"
             git push origin "refs/tags/$VERSION"
           fi
           if ! gh release view "$VERSION" >/dev/null 2>&1; then
-            gh release create "$VERSION" --draft --verify-tag --title "Claudex $VERSION" --notes-file release/NOTES.md
+            gh release create "$VERSION" --draft --verify-tag --title "claudex $VERSION" --notes-file release/NOTES.md
           fi
           gh release upload "$VERSION" release/claudex-*.tar.gz release/SHA256SUMS --clobber
           gh release edit "$VERSION" --draft=false --latest --notes-file release/NOTES.md

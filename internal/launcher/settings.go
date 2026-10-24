@@ -51,7 +51,7 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 		"ANTHROPIC_DEFAULT_MODEL":                    model.ID,
 		"ANTHROPIC_CUSTOM_MODEL_OPTION":              model.ID,
 		"ANTHROPIC_CUSTOM_MODEL_OPTION_NAME":         model.Name + suffix,
-		"ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION":  "Local Claudex proxy",
+		"ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION":  "Local claudex proxy",
 		"ANTHROPIC_SMALL_FAST_MODEL":                 small.ID,
 		"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS":             strconv.Itoa(cfg.ContextWindow),
@@ -75,7 +75,7 @@ func Settings(cfg config.Config) (ClaudeSettings, error) {
 	settings := ClaudeSettings{Env: env, Model: model.ID, EffortLevel: cfg.ReasoningEffort}
 	// Gateway discovery adds rows to Claude's built-in lineup. Replace it to
 	// avoid image models, unsupported versions and duplicate family/custom rows.
-	// These settings apply only to Claude instances launched through Claudex.
+	// These settings apply only to Claude instances launched through claudex.
 	settings.ModelPicker.ReplaceBuiltInOptions = true
 	for _, option := range config.Models() {
 		settings.AvailableModels = append(settings.AvailableModels, option.ID)

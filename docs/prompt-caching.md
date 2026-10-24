@@ -1,12 +1,12 @@
 # Prompt caching
 
-Claudex supports upstream Codex prompt-cache reuse. It keeps session routing and
+claudex supports upstream Codex prompt-cache reuse. It keeps session routing and
 translated request prefixes stable where possible and reports the cached-input
 counts returned by Codex. It does not store a local cache of prompts or answers.
 
 ## How it works
 
-For generation requests with Claude's `metadata.user_id`, Claudex derives a stable
+For generation requests with Claude's `metadata.user_id`, claudex derives a stable
 hashed identity and sends it as both `prompt_cache_key` and the upstream
 `Session_id` header. The translator omits Claude's per-request billing attribution
 block so changing attribution does not change the reusable prompt prefix.
@@ -34,7 +34,7 @@ instructions, tool arguments, and exact numeric values remain. Review identity
 uses session metadata when present and falls back to the primary workspace.
 
 These measures support reuse; the upstream service decides whether a request
-actually uses its cache. Claudex cannot guarantee a hit, a retention period, a
+actually uses its cache. claudex cannot guarantee a hit, a retention period, a
 latency reduction, or a particular amount of subscription usage saved. Claude's
 `cache_control` annotations are not translated into an Anthropic-managed cache.
 
@@ -68,7 +68,7 @@ key that exists only for the gateway process. They contain no prompt, command,
 path, permission text, or original session identifier. At most 32 groups and the
 first 256 message fingerprints per group are retained. An additional keyed
 fingerprint checks the entire previous last-user boundary, including histories
-longer than 256 messages. A matching local prefix or boundary shows that Claudex
+longer than 256 messages. A matching local prefix or boundary shows that claudex
 preserved evidence; it does not prove upstream cache reuse.
 
 Concurrent workers can share session metadata while using different histories.
@@ -89,5 +89,5 @@ a translation error. No local switch can force the upstream to reuse a cache.
 The public [OpenAI prompt-caching guide](https://developers.openai.com/api/docs/guides/prompt-caching)
 describes exact prefix matching and explicit cache breakpoints. The Codex
 subscription endpoint has a different request contract: a live check rejected
-`prompt_cache_breakpoint` with HTTP 400. Claudex does not send that unsupported
+`prompt_cache_breakpoint` with HTTP 400. claudex does not send that unsupported
 field or change cache retention settings.

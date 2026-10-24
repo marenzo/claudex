@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const usageText = `Claudex runs Claude Code with GPT through your Codex subscription.
+const usageText = `claudex runs Claude Code with GPT through your Codex subscription.
 
   claudex [Claude arguments]     Start Claude with an automatic gateway
   claudex ctl                    Open the terminal dashboard
@@ -32,7 +32,7 @@ const usageText = `Claudex runs Claude Code with GPT through your Codex subscrip
   claudex ctl logs [--follow]    Read gateway logs
   claudex ctl --version          Show gateway version
 
-Only ctl belongs to Claudex; other arguments pass through to Claude Code.
+Only ctl belongs to claudex; other arguments pass through to Claude Code.
 `
 
 func usage(w io.Writer) { fmt.Fprint(w, usageText) }

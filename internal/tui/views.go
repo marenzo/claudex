@@ -496,7 +496,7 @@ func (m *model) overview() string {
 	}
 	top := stats(w)
 	if h >= 38 && w >= 120 {
-		top = spaced(ink(wordmark, p.focus), stats(w-41), 39, w-41, 4, 2)
+		top = spaced(ink(wordmark, p.focus), stats(w-41), 39, w-41, 5, 2)
 	}
 	if h < 19 {
 		cache := "Tokens —"

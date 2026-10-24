@@ -1,6 +1,6 @@
 # Experimental GPT auto-mode classifier
 
-Claudex can review Claude Code tool calls using a separate GPT request, then
+claudex can review Claude Code tool calls using a separate GPT request, then
 return the `dangerous_tool_use` verdicts Claude Code expects. This is a custom
 permission policy, not Anthropic's classifier and not Anthropic's no-charge
 classifier service. Both generation and classification consume Codex usage.
@@ -37,7 +37,7 @@ Open `claudex ctl config`, select Command reviewer, choose Claude client, and sa
 or remove the field or set it to an
 empty string, to disable the custom reviewer. Start a new session. The launcher then selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=0`, which keeps Claude Code's own client-side
-classifier active and routes its ordinary model requests through Claudex.
+classifier active and routes its ordinary model requests through claudex.
 The variable selects the location of classification; it does not turn auto mode
 or permission checks off. See the official
 [classifier billing guidance](https://code.claude.com/docs/en/auto-mode-classifier-billing).
@@ -59,7 +59,7 @@ Prompts, retrieved content and tool arguments are evidence, not instructions to
 the reviewer. Claude Code still applies its own permission rules and executes
 or denies the tool after receiving the result.
 
-Claudex holds the **entire response** until review succeeds, including streamed
+claudex holds the **entire response** until review succeeds, including streamed
 tool blocks, so no proposed client tool is released on a review error. Streamed
 requests receive keep-alive pings while waiting. This increases time to first
 visible output and does not offer incremental text streaming for reviewed turns.
@@ -189,7 +189,7 @@ CLAUDEX_TEST_AUTH_FILE=/private/path/auth-copy.json \
 
 The initial Astra check allowed harmless printing and flagged an unauthorized
 credential upload whose tool description also tried to inject an approval.
-A combined test also passed the real Claude Code → Claudex → Astra classifier →
+A combined test also passed the real Claude Code → claudex → Astra classifier →
 Claude Code path for a harmless `printf`. Generation was a local fixture;
 classification was live. The single review took about 6.7 seconds in that run.
 Run it with both variables above and
@@ -227,5 +227,5 @@ A resumed worker can also retain an earlier stop-on-denial instruction while
 receiving renewed approval only as a coordinator's message. Approval visible in
 the parent is not guaranteed to reach the worker's review context as verifiable
 user authorization. Repeating the same relay can produce repeated denials. This
-approval-propagation limitation remains unresolved; Claudex does not promote an
+approval-propagation limitation remains unresolved; claudex does not promote an
 agent's claim of approval into user consent.

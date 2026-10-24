@@ -4,13 +4,13 @@
 
 Use GitHub's private vulnerability reporting on this repository
 (**Security → Report a vulnerability**). Do not open a public issue for
-security problems. Please include the Claudex version (`claudex ctl --version`), the
+security problems. Please include the claudex version (`claudex ctl --version`), the
 platform, and steps to reproduce. Never include OAuth tokens, refresh tokens,
 client keys, account identifiers, or prompt/conversation content in a report.
 
 Only the latest release receives fixes.
 
-## What Claudex protects
+## What claudex protects
 
 - The gateway binds to loopback unless `-listen` is passed explicitly, and inference and control
   API routes require the local client key, compared in constant time.

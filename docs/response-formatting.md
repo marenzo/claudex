@@ -2,7 +2,7 @@
 
 Claude Code renders ordinary Markdown. GPT can also return source-reference
 markers that require its provider's renderer, such as
-`citeturn0view0`. Claudex translates those markers using the URL annotations
+`citeturn0view0`. claudex translates those markers using the URL annotations
 returned with the response.
 
 - A positioned source becomes an inline Markdown link beside its claim. Multiple
@@ -25,5 +25,5 @@ otherwise preserved.
 
 The [OpenAI web-search documentation](https://developers.openai.com/api/docs/guides/tools-web-search)
 describes URL annotations with source URLs, titles, and citation locations.
-Claudex renders those as Markdown rather than inventing Anthropic-issued
+claudex renders those as Markdown rather than inventing Anthropic-issued
 encrypted citation indexes or search-result credentials.

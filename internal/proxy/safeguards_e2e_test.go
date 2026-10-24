@@ -21,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// Exercise the real Claude Code permission decision through Claudex, with both
+// Exercise the real Claude Code permission decision through claudex, with both
 // model responses provided by local fixtures. No subscription or live service is used.
 func TestClaudeSafeguardDecisions(t *testing.T) {
 	claude := os.Getenv("CLAUDEX_TEST_CLAUDE_BIN")
@@ -128,5 +128,5 @@ func runClaudeSafeguardProbe(t *testing.T, claude, outcome string, live *auth.Cr
 	if err := json.Unmarshal(out, &result); err != nil {
 		t.Fatalf("invalid CLI result: %s", out)
 	}
-	t.Logf("real Claude Code accepted %s verdict through Claudex (live GPT: %t)", outcome, live != nil)
+	t.Logf("real Claude Code accepted %s verdict through claudex (live GPT: %t)", outcome, live != nil)
 }

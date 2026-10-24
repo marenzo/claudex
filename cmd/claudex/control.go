@@ -74,7 +74,7 @@ func cmdStatus(args []string) error {
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(s)
 	}
-	fmt.Printf("Claudex %s · %s\n%s · %d clients · %d active\nModel %s · effort %s · reviewer %s\n", s.Version, c.URL, s.Mode, s.Clients, s.Active, s.Preferences.Model, s.Preferences.Effort, s.Preferences.Reviewer)
+	fmt.Printf("claudex %s · %s\n%s · %d clients · %d active\nModel %s · effort %s · reviewer %s\n", s.Version, c.URL, s.Mode, s.Clients, s.Active, s.Preferences.Model, s.Preferences.Effort, s.Preferences.Reviewer)
 	return nil
 }
 func cmdLogs(args []string) error {

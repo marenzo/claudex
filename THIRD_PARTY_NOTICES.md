@@ -1,10 +1,10 @@
 # Third-party notices
 
-Claudex includes the Go runtime and the dependencies below. The terminal interface is compiled into the same binary.
+claudex includes the Go runtime and the dependencies below. The terminal interface is compiled into the same binary.
 
 ## CLIProxyAPI (MIT)
 
-Claudex was inspired by [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), and its early protocol translation code started from that project (v7.3.0, commit `30b2ac8996ea920285ef983dfaaa8e17624c8d21`). Claudex is its own solution and is not affiliated with that project. Its MIT copyright notice:
+claudex was inspired by [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), and its early protocol translation code started from that project (v7.3.0, commit `30b2ac8996ea920285ef983dfaaa8e17624c8d21`). claudex is its own solution and is not affiliated with that project. Its MIT copyright notice:
 
 ```text
 Copyright (c) 2025-2005.9 Luis Pater

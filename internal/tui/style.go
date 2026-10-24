@@ -121,10 +121,11 @@ func modelIDs() []string {
 	return out
 }
 
-const wordmark = `  ___ _      _   _   _ ___  _____  __
- / __| |    /_\ | | | |   \| __\ \/ /
-| (__| |__ / _ \| |_| | |) | _| >  <
- \___|____/_/ \_\\___/|___/|___/_/\_\`
+const wordmark = "      _                 _\n" +
+	"  ___| | __ _ _   _  __| | _____  __\n" +
+	" / __| |/ _` | | | |/ _` |/ _ \\ \\/ /\n" +
+	"| (__| | (_| | |_| | (_| |  __/>  <\n" +
+	" \\___|_|\\__,_|\\__,_|\\__,_|\\___/_/\\_\\"
 
 func (m *model) dimensions() (w, h int, rail bool) {
 	rail = m.width >= 120 && m.height >= 36
@@ -203,7 +204,7 @@ func (m *model) chrome() (string, string) {
 		connection = "Connection lost · retrying"
 		connectionColor = p.bad
 	}
-	brand := strong("[c/x] CLAUDEX", p.focus)
+	brand := strong("[c/x] claudex", p.focus)
 	if m.width >= 100 {
 		brand += ink(" / request monitor", p.dim)
 	}

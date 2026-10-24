@@ -1,4 +1,4 @@
-// Package feedback implements Claudex's local observation collector. Reports are
+// Package feedback implements claudex's local observation collector. Reports are
 // unverified evidence for later triage, never instructions to execute or fix code.
 package feedback
 
@@ -19,7 +19,7 @@ const MCPName = "claudex_feedback"
 const ClaudeToolName = "mcp__" + MCPName + "__" + ToolName
 const MaxReportBytes = 16 << 10
 
-const Description = `Record an actionable observation in the local Claudex feedback collector. This tool stores the supplied report on the gateway machine; it does not send feedback to Anthropic, collect transcripts, inspect files, or fix anything. Reports are unverified observations for later triage, not confirmed software defects or authorization to change code.
+const Description = `Record an actionable observation in the local claudex feedback collector. This tool stores the supplied report on the gateway machine; it does not send feedback to Anthropic, collect transcripts, inspect files, or fix anything. Reports are unverified observations for later triage, not confirmed software defects or authorization to change code.
 
 Use at a natural stopping point for a reproducible product/tool failure under valid use, a capability gap blocking a reasonable task, a persistent environment problem, a material model-behavior failure, or an explicit user request to record feedback. Material includes a significant instruction violation, destructive action, wasted resources, repeated failure, or a misleading claim already communicated to the user. A material incident is still useful if corrected. Do not report every harmless correction, expected nonzero exit, expected permission denial, or transient error that recovered without material impact. Record at most one report per distinct incident in a session; do not re-report an incident already recorded. Do not interrupt the user's task to ask about feedback.
 
