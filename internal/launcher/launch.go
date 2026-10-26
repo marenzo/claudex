@@ -11,6 +11,7 @@ import (
 	"github.com/marenzo/claudex/internal/config"
 	"github.com/marenzo/claudex/internal/control"
 	"github.com/marenzo/claudex/internal/feedback"
+	"github.com/marenzo/claudex/internal/handoff"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -144,7 +145,15 @@ func Run(claude string, args []string, cfg config.Config, c *control.Client) err
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrAttach, err)
 	}
-	launchArgs := []string{"--disallowedTools", "Artifact,SendFeedback,SendUserFeedback", "--settings", string(data)}
+	binary, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	pluginPath, err := handoff.InstallPlugin(filepath.Join(filepath.Dir(cfg.ClientKeyFile), "claudex.runtime"))
+	if err != nil {
+		return fmt.Errorf("prepare built-in Codex skill: %w", err)
+	}
+	launchArgs := []string{"--plugin-dir", pluginPath, "--disallowedTools", "Artifact,SendFeedback,SendUserFeedback", "--settings", string(data)}
 	if cfg.Feedback.Enabled {
 		binary, err := os.Executable()
 		if err != nil {
@@ -161,7 +170,7 @@ func Run(claude string, args []string, cfg config.Config, c *control.Client) err
 		launchArgs = append(launchArgs, "--mcp-config", string(mcp))
 	}
 	cmd := exec.Command(claude, append(launchArgs, RewriteArgs(args)...)...)
-	cmd.Env = Environment(settings, c.URL, c.Key)
+	cmd.Env = append(Environment(settings, c.URL, c.Key), "CLAUDEX_BINARY="+binary)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

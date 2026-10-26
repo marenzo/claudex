@@ -40,26 +40,10 @@ latency reduction, or a particular amount of subscription usage saved. Claude's
 
 ## Reading the metrics
 
-Open `claudex ctl`. Overview, Models, and Requests show reported usage:
-
-Generation is selected by default. Press **g** to switch to **Auto reviews** or
-**All calls**. Generation and reviews can use the same model while having very
-different cache behavior, so compare them separately.
-
-- **Cached input** is the subset of input tokens the upstream reused.
-- **New input** is reported input minus cached input.
-- **Input from cache** is cached input divided by reported input. It measures
-  tokens, not the percentage of requests that had any cache reuse.
-- **Output** includes reasoning tokens; reasoning is not added a second time.
-- Missing token usage is unavailable, rather than a zero-token result. Summary
-  views show how many requests supplied usage counts.
-
-Reviewer requests contribute their own token usage to gateway metrics. Claude
-Code's displayed generation usage does not include the separate reviewer call.
-All-call duration totals overlap: generation duration already includes its
-review. Use a generation record's review duration to assess added waiting time.
-The dashboard's 500-request and two-hour history limits describe local monitoring
-retention, not the upstream prompt cache's lifetime.
+Open `claudex ctl` and press **g** to compare generation and Auto reviews separately.
+Use upstream cached-input counts to establish reuse. Local history retention is
+unrelated to upstream cache lifetime; see [metric definitions](tui.md#what-is-measured)
+for usage accounting and overlapping generation/review durations.
 
 The review inspector also shows bounded cache diagnostics: whether the stable
 prefix or live context changed, and how many initial evidence messages match the

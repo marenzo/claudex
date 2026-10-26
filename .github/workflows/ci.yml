@@ -14,11 +14,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
-      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - run: make docs-check
       - run: go mod verify
       - run: make check build
   lint:
@@ -54,6 +56,9 @@ jobs:
           make package VERSION="dev-${GITHUB_SHA:0:12}" ARCHIVE="$archive"
           sha256sum "$archive"
           tar -tzf "$archive" >/dev/null
+          extracted=$(mktemp -d)
+          tar -xzf "$archive" -C "$extracted"
+          python3 .github/scripts/check_docs.py --package "$extracted"
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

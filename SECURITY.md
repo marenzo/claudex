@@ -25,3 +25,8 @@ Only the latest release receives fixes.
 
 The HTTP listener has no TLS. Do not expose it beyond the local machine or a
 trusted container network.
+
+Native session handoff creates private local copies of conversation history,
+instructions, and project memory, separate from monitoring and feedback storage.
+These copies can contain secrets already present in the source. See
+[handoff storage and retention](docs/handoff.md#private-storage).

@@ -59,6 +59,9 @@ jobs:
               archive="release/claudex-${VERSION}-${goos}-${goarch}.tar.gz"
               GOOS="$goos" GOARCH="$goarch" make package VERSION="$VERSION" ARCHIVE="$archive"
               tar -tzf "$archive" >/dev/null
+              extracted=$(mktemp -d)
+              tar -xzf "$archive" -C "$extracted"
+              python3 .github/scripts/check_docs.py --package "$extracted"
             done
           done
           cd release

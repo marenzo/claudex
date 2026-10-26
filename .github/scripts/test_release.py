@@ -1,5 +1,5 @@
 import unittest
-from release import choose, changelog_section, version
+from release import choose, changelog_section, version, release_notes
 
 
 class ReleasePlanTest(unittest.TestCase):
@@ -24,6 +24,13 @@ class ReleasePlanTest(unittest.TestCase):
     def test_changed_floor_cannot_reuse_older_head_tag(self):
         with self.assertRaises(ValueError):
             choose("v1.3.0", ["v1.2.0"], ["v1.2.0"])
+
+    def test_publication_requires_versioned_notes(self):
+        for text in ("# Changelog\n", "## Unreleased\n- Future\n", "## v1.2.3\n", "## v1.2.3\nTODO\n"):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(ValueError, "v1.2.3"):
+                    release_notes(text, "v1.2.3")
+        self.assertEqual(release_notes("## v1.2.3\n- Fixed\n", "v1.2.3"), "- Fixed")
 
     def test_notes_only_include_requested_release(self):
         text = "# Changelog\n\n## Unreleased\n\n- Future\n\n## v1.2.0 — 2026-10-23\n\n- Feedback\n\n### Upgrade\nRestart.\n\n## v1.1.0\n- Old\n"

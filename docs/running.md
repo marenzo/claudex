@@ -29,6 +29,32 @@ Fresh setup puts the client key at `~/.config/claudex/client-key` and the Codex
 sign-in at `~/.config/claudex/auth/codex.json`. Existing setups keep their configured
 locations. See [private files](configuration.md#private-files) before moving them.
 
+## Commands and flags
+
+| Command | Behavior |
+| --- | --- |
+| `claudex [Claude arguments]` | Launch Claude through an automatic or existing gateway |
+| `claudex ctl` | Open the TUI; requires a terminal |
+| `claudex ctl config` | Open TUI settings |
+| `claudex ctl status [--json]` | Query authenticated running state |
+| `claudex ctl setup` | Create config/client key and sign in, without installing anything |
+| `claudex ctl setup --login` | Sign in again using the credential store's file lock |
+| `claudex ctl setup --no-browser` | Print the sign-in URL without opening a browser |
+| `claudex ctl setup --no-login` | Initialize without signing in |
+| `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
+| `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
+| `claudex ctl feedback [on|off|status|list]` | Control local feedback collection or read stored reports |
+| `claudex ctl handoff [--source PATH] [--launch \| --json]` | [Transfer a Claude session to native Codex](handoff.md) |
+| `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
+
+Use `--config PATH` on setup, run, logs, status, or the TUI. TUI and status accept
+`--url URL --key-file PATH` instead. `ctl run --listen` is the only way to bind a
+non-loopback address. It logs a warning because the HTTP listener has no TLS.
+Run `claudex ctl --help` or a command's `--help` for its complete syntax.
+
+Usage mistakes exit with status 2; startup failures exit with status 1. Once
+Claude is running, claudex propagates its exit status.
+
 ## Gateway lifetime
 
 `claudex` reuses a compatible authenticated gateway at the configured address. If
@@ -89,16 +115,6 @@ An interrupted stream log has `retrying: true` when the gateway will attempt
 recovery. Inspect the final `messages` record to determine the generation outcome.
 Sign-in refresh after an HTTP 401 is handled separately by the credential store.
 
-## Updating an existing gateway
-
-After updating a binary, restart its running gateway and reopen the TUI to load
-the new build. `claudex ctl --version` identifies the CLI binary;
-`claudex ctl status --json` identifies the running gateway. An existing process
-continues using the binary it loaded until restarted. Foreground gateways stop on
-Ctrl-C; Homebrew gateways use `brew services restart`; automatic gateways exit
-after their attached clients disconnect and active requests finish.
-Ctrl-C or SIGTERM gives active requests up to 30 seconds to finish during shutdown.
-
 ## Homebrew
 
 The repository is also a Homebrew tap using an explicit remote URL. Its HEAD-only
@@ -129,7 +145,7 @@ Sign in on the host because the callback listener binds to loopback. Prepare a
 separate directory for Docker, retaining private permissions:
 
 ```sh
-make docker
+make build docker
 ./dist/claudex ctl setup --config "$HOME/.config/claudex-docker/host.json"
 cp examples/config.json "$HOME/.config/claudex-docker/config.json"
 chmod 600 "$HOME/.config/claudex-docker/config.json"
@@ -145,7 +161,8 @@ The default container command is `claudex ctl run --config /data/config.json
 **directory**, because credential refresh and settings saves replace files
 atomically. A single-file mount cannot support those replacements.
 
-From the host, launch Claude against the container and open the TUI:
+Keep the container running. In another host terminal, launch Claude; open the TUI
+in a third terminal:
 
 ```sh
 CLAUDEX_CONFIG="$HOME/.config/claudex-docker/host.json" ./dist/claudex
@@ -160,10 +177,16 @@ interfaces; use an SSH tunnel or HTTPS reverse proxy for remote access.
 
 ## Updating and uninstalling
 
-For portable binaries, close attached sessions, stop any foreground gateway, and
-replace the binary. An automatic gateway exits when its clients disconnect. For
-Homebrew, use its upgrade and service commands. Runtime components must use this
-control protocol; unsupported older gateways are rejected.
+After updating a binary, restart its running gateway and reopen the TUI to load
+the new build. `claudex ctl --version` identifies the CLI binary;
+`claudex ctl status --json` identifies the running gateway. An existing process
+continues using the binary it loaded until restarted. Foreground gateways stop on
+Ctrl-C; Homebrew gateways use `brew services restart`; automatic gateways exit
+after their attached clients disconnect and active requests finish.
+Ctrl-C or SIGTERM gives active requests up to 30 seconds to finish during shutdown.
+
+For portable binaries, close attached sessions and replace the binary. Unsupported
+control protocols are rejected. Reopen the TUI after the gateway restarts.
 
 Uninstall a portable copy by removing that binary. For Homebrew:
 

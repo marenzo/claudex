@@ -16,37 +16,22 @@ flowchart LR
 
 ## Request lifecycle
 
-1. The launcher starts or reuses a gateway, derives active Claude settings, and
-   injects the client key. Claude Code never receives the Codex sign-in token.
-2. claudex authenticates the request and bounds its body. It resolves the requested
-   model and translates Claude system prompts, messages, and tools to Codex
-   Responses input.
-3. The credential store rereads the Codex sign-in file and refreshes credentials
-   shortly before they expire. It writes refreshed tokens atomically. A
-   cross-process file lock stops cooperating claudex instances from racing the same
-   refresh token. A transient refresh failure does not fail the request while the
-   current access token is still valid.
-4. The fixed Codex transport sends the request to the subscription Responses
-   endpoint. After a 401, the gateway refreshes the sign-in once and retries. It
-   does not retry when the refreshed sign-in belongs to a different account.
-   Separately, the proxy permits one retry for a recognized transient transport
-   failure before any message event reaches Claude Code. A retry discards partial
-   translation state and retains the original request and configuration snapshot.
-   For streamed responses, the local input token estimate runs in parallel with
-   this request, so it adds no delay before the first byte.
-5. The translator builds Claude-compatible JSON or streaming events. It preserves
-   tool IDs, errors, refusals, images, parallel calls, URL citations, and encrypted
-   reasoning state for later turns. Codex search activity is left out of history.
-   Anthropic accepts search-result replay only with opaque state that Anthropic
-   issued. A terminal failure never becomes an empty successful turn.
-6. Requests with supported Auto Mode safeguards hold their entire response. When
-   client tools are proposed, a separate GPT request reviews them. The reviewer
-   has no tools and returns structured verdicts. Only a successful complete review
-   releases the response; a failed review releases no tools. Its transport retry
-   shares the original 60-second deadline. See [Auto Mode](auto-mode.md).
-7. The gateway records generation and review metadata and token usage separately.
-   Reviews link to their parent generation trace; retry attempts belong to the
-   same logical record. See [the TUI guide](tui.md) for retention and accounting.
+1. The launcher starts or reuses a compatible gateway and injects its client key
+   and active preferences into Claude Code. The Codex credential stays with the gateway.
+2. The gateway authenticates and bounds the request, resolves the model, and
+   translates Messages input into Responses input.
+3. The credential store refreshes expiring credentials with a cross-process lock
+   and atomic persistence. A still-valid access token survives a transient refresh
+   failure. After HTTP 401, it refreshes and resends once, unless the account changed.
+4. The transport sends to the fixed Codex subscription endpoint. Recognized transport
+   failures can retry once before message delivery; see [recovery](running.md#upstream-recovery).
+   Local token estimation runs concurrently with streamed inference.
+5. Translation preserves tools, images, refusals, citations, and encrypted reasoning
+   continuity. Terminal failures never become empty successful turns.
+6. Supported Auto Mode safeguards hold the response until complete tool verdicts
+   arrive. Review errors release no tools; see [Auto Mode](auto-mode.md).
+7. Generation and review metrics are recorded separately and linked by trace.
+   See [TUI metrics](tui.md#what-is-measured) for accounting and retention.
 
 ## HTTP routes
 
@@ -62,6 +47,11 @@ checked on its own.
 | `GET /v1/models/{id}` | One model |
 | `GET /_claudex/metrics` | Bounded metrics snapshot |
 | `GET /_claudex/status` | Authenticated gateway state for `claudex ctl` |
+| `POST /_claudex/sessions` | Attach a Claude or TUI lifetime connection |
+| `GET /_claudex/config` | Preferences, startup fields, and revision |
+| `PUT /_claudex/config` | Revision-checked live preferences |
+| `POST /_claudex/feedback` | Store a local report when enabled |
+| `GET /_claudex/feedback` | Paginated local reports |
 
 These routes need no key:
 
@@ -116,9 +106,8 @@ that is not an integer of at least -1 also returns an error. The Codex API accep
 only `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. It rejects
 `ultra`.
 
-Codex's own Ultra setting is a client mode, not an API level. Upstream Codex 430a167 resolves it using each model's
-`multi_agent_reasoning_effort`, falling back to `max`. Max carries `max`. Under claudex, Claude Code's ultracode workflow supplies the
-delegation. The gateway does not implement Codex's multi-agent harness.
+`ultra` selects the catalog's model-specific effort. Claude Code owns its
+ultracode orchestration; claudex does not implement Codex's multi-agent harness.
 
 Astra/6.1 Sol's `low` fallback for disabled thinking cannot promise zero reasoning.
 `thinking.display: omitted` hides visible summaries but keeps encrypted reasoning
@@ -132,19 +121,41 @@ or `web_search_tool_result` blocks. Those blocks cannot be resumed without
 in Claude Code. Artifact publishing is blocked because no subscription bridge for
 it exists. Creating ordinary files still works.
 
+## Response formatting
+
+Claude Code renders ordinary Markdown. GPT can also return source-reference
+markers that require its provider's renderer, such as
+`citeturn0view0`. claudex translates those markers using the URL annotations
+returned with the response.
+
+- A positioned source becomes an inline Markdown link beside its claim. Multiple
+  sources in one marker remain together, even when their annotations arrive in
+  separate streaming events.
+- Native Markdown links remain unchanged. Repeated annotation and completion
+  events do not duplicate their links or the answer text.
+- Sources without usable positions appear in a separate **Sources** list. Source
+  titles and link targets are escaped for Markdown, and only HTTP(S) annotations
+  become links.
+- A reference without usable source metadata becomes `[source unavailable]`.
+  Internal reference IDs are never used to guess URLs.
+- Literal markers inside fenced code or inline code remain code examples.
+
+Streaming text before a citation is delivered normally. A partial citation and
+following text wait until its source annotations arrive or the content part ends,
+so internal IDs do not flash on screen. Complete JSON responses use the same
+conversion. Plain text, tool arguments, and encrypted reasoning replay state are
+otherwise preserved.
+
+The [OpenAI web-search documentation](https://developers.openai.com/api/docs/guides/tools-web-search)
+describes URL annotations with source URLs, titles, and citation locations.
+claudex renders those as Markdown rather than inventing Anthropic-issued
+encrypted citation indexes or search-result credentials.
+
 ## Prompt caching
 
-Generation requests derive a hashed cache identity from Claude's user/session
-metadata and send it through `prompt_cache_key` and `Session_id`. The translator
-removes the changing billing attribution block while retaining actual application
-instructions. The optional reviewer has a separate stable identity and output
-schema. System/tool evidence and history precede the proposed call batch, whose
-canonical JSON matches its later historical entry. Fresh permission context
-follows as host-supplied JSON in a trailing developer message, preserving the
-previous implicit cache boundary while evaluating current rules on every review.
-Quoted transcript and tool arguments remain untrusted evidence. Cache use is
-decided upstream and reported through usage counts. See
-[prompt caching](prompt-caching.md).
+Generation and optional command reviews use separate stable cache identities.
+The upstream service decides reuse. See [Prompt caching](prompt-caching.md) for
+request ordering, diagnostics, and boundaries.
 
 ## Quota recovery
 
@@ -185,3 +196,14 @@ When enabled in preferences, the launcher injects a stdio MCP server backed by
 acceptance share a lock so disable is an immediate persistence boundary. Collection
 runs independently of inference and never invokes the native Anthropic feedback
 client. See [feedback](feedback.md) for provenance, retention and trust limits.
+
+## Native session handoff
+
+The launcher materializes an embedded Claude plugin beside the client key under
+`claudex.runtime/plugins/` and loads it with `--plugin-dir`. A SessionStart hook
+binds the current transcript through Claude's hook environment file. The
+`internal/handoff` package snapshots that history and local context, then calls
+native Codex's `externalAgentConfig/import` over a temporary stdio app-server.
+It verifies the saved thread identity and workspace before returning its resume
+command. This path is independent of the HTTP gateway. See
+[handoff behavior and limits](handoff.md).

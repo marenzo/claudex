@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Plan a stable release. This script never mutates Git refs or publishes."""
+import argparse
 import os
 from pathlib import Path
 import re
@@ -34,7 +35,7 @@ def choose(floor, tags, at_head):
 
 
 def changelog_section(text, tag):
-    match = re.search(r"^## " + re.escape(tag) + r"(?:\s|$)[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    match = re.search(r"^## " + re.escape(tag) + r"(?:[ \t]+[^\n]*)?\n(.*?)(?=^## |\Z)", text, re.M | re.S)
     return match.group(1).strip() if match else ""
 
 
@@ -42,18 +43,27 @@ def git(*args):
     return subprocess.check_output(["git", *args], text=True).strip()
 
 
+def release_notes(text, tag):
+    notes = changelog_section(text, tag)
+    if not notes or not re.search(r"^[-*] \S", notes, re.M):
+        raise ValueError(f"CHANGELOG.md needs nonempty release notes under ## {tag}")
+    return notes
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true', help='Validate planned notes without writing files')
+    args = parser.parse_args()
     head = git("rev-parse", "HEAD")
-    if head != os.environ["GITHUB_SHA"]:
+    if not args.check and head != os.environ["GITHUB_SHA"]:
         raise RuntimeError("release checkout does not match the triggering commit")
     tags = git("tag", "--list").splitlines()
     at_head = [t for t in tags if PATTERN.fullmatch(t) and git("rev-list", "-n", "1", t) == head]
     target, previous = choose(Path("VERSION").read_text().strip(), tags, at_head)
-    notes = changelog_section(Path("CHANGELOG.md").read_text(), target)
-    if not notes:
-        if previous:
-            subprocess.run(["git", "merge-base", "--is-ancestor", previous, head], check=True)
-        notes = git("log", "--no-merges", "--format=- %s (%h)", f"{previous}..{head}" if previous else head)
+    notes = release_notes(Path("CHANGELOG.md").read_text(), target)
+    if args.check:
+        print(f"Validated release notes for {target}.")
+        return
     notes += f"\n\nBuilt from `{head}`.\n"
     Path("release").mkdir(exist_ok=True)
     Path("release/NOTES.md").write_text(notes)

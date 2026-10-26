@@ -8,6 +8,7 @@ import (
 	"github.com/marenzo/claudex/internal/auth"
 	"github.com/marenzo/claudex/internal/config"
 	"github.com/marenzo/claudex/internal/control"
+	"github.com/marenzo/claudex/internal/handoff"
 	"github.com/marenzo/claudex/internal/launcher"
 	"io"
 	"os"
@@ -27,6 +28,7 @@ const usageText = `claudex runs Claude Code with GPT through your Codex subscrip
   claudex ctl status [--json]     Inspect the running gateway
   claudex ctl feedback on|off    Enable or disable local feedback collection
   claudex ctl feedback list      Read collected observations as JSON
+  claudex ctl handoff            Continue this Claude session in native Codex
   claudex ctl setup              Prepare config and Codex sign-in
   claudex ctl run                Run a persistent foreground gateway
   claudex ctl logs [--follow]    Read gateway logs
@@ -70,6 +72,13 @@ func command(args []string) error {
 		return cmdLogs(rest)
 	case "feedback":
 		return cmdFeedback(rest)
+	case "handoff":
+		return cmdHandoff(rest)
+	case "handoff-session":
+		if len(rest) != 0 {
+			return usageError{"handoff-session takes hook input on stdin"}
+		}
+		return handoff.CaptureSession(os.Stdin, os.Getenv("CLAUDE_ENV_FILE"))
 	case "feedback-mcp":
 		return cmdFeedbackMCP(rest)
 	case "--version":
