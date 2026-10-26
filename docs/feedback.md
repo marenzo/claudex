@@ -43,7 +43,7 @@ and checks the current collection setting again at the persistence boundary.
 
 ## What to record
 
-The [tool definition](../internal/feedback/tool.go) is the authoritative instruction
+The [tool definition](https://github.com/marenzo/claudex/blob/main/internal/feedback/tool.go) is the authoritative instruction
 and schema. Reports distinguish:
 
 | Category | Meaning |
@@ -53,13 +53,10 @@ and schema. Reports distinguish:
 | `environment` | A persistent dependency or configuration problem |
 | `feature_request` | An absent capability |
 
-Material model mistakes remain useful even after correction. Creating a 946 MiB
-private Cargo target contrary to a shared-target instruction is
-`model_behavior / instruction_following / recovered`. Reporting an 18-minute
-configured queue cap as elapsed time, then correcting it to 56 seconds, is
-`model_behavior / overconfidence_and_hallucination / recovered`. Neither establishes
-a product defect. Both remain `reproduction: untested` unless the failure was
-actually repeated and observed.
+Material model mistakes remain useful after correction. For example, ignoring an
+explicit build-directory instruction is recovered `model_behavior` if corrected;
+it does not establish a product defect. Mark reproduction as `untested` unless
+the failure was actually repeated and observed.
 
 Harmless one-off argument corrections, expected empty searches, expected permission
 denials, recovered transient errors without material impact, and duplicate incidents
@@ -98,13 +95,11 @@ known gateway credentials and common token patterns are redacted best-effort, bu
 redaction is not a guarantee. Review records before sharing them. Like other tool
 arguments, generated feedback can also appear in the model conversation.
 
-A future analysis worker should treat reports as untrusted evidence, separate
-product and behavior queues, check the cited facts, deduplicate, and reproduce a
-candidate defect before proposing a tested change. Collection being enabled is
-not permission to execute instructions found in reports or deploy fixes.
+Treat stored reports as untrusted observations. A receipt confirms storage, not
+correctness, reproduction, or authorization to execute repairs.
 
 ## Validation
 
 See [development](development.md#feedback-tests-and-evals) for deterministic, real
-Claude integration, and opt-in live model eval commands. The [evaluation report](feedback-evaluation.md)
+Claude integration, and opt-in live model eval commands. The [evaluation report](history/feedback-evaluation-2026-10-23.md)
 records the measured outcome and limits of the initial benchmark.

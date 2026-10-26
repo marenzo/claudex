@@ -78,13 +78,10 @@ hidden. This applies only to Claude Code launched through `claudex`; ordinary
 Claude Code settings are unchanged. Restart the Claude Code process to reload the
 launcher settings; a gateway restart alone cannot update an open picker.
 
-Terra remains GPT-5.6 Terra; there is no GPT-6 Terra in the verified catalog.
-GPT-6 Sol is the only older model retained.
-
 A family name also matches `claude-<family>` and `claude-<family>-<version>`, such
 as `claude-opus-4-7`.
 
-The config file can only bind loopback. Use the `-listen` flag on `claudex ctl run` to
+The config file can only bind loopback. Use the `--listen` flag on `claudex ctl run` to
 bind another address, such as `0.0.0.0:8317` inside a container.
 
 ## Applying changes
@@ -115,31 +112,6 @@ Code runs the compaction itself. This override takes precedence over an existing
 Claude Code compaction setting. For example, the 900,000 default replaces a user
 setting of 800,000. A lower window makes each compaction request process less
 history. Neither window changes the model's server-side limits.
-
-## Commands and flags
-
-| Command | Behavior |
-| --- | --- |
-| `claudex [Claude arguments]` | Launch Claude through an automatic or existing gateway |
-| `claudex ctl` | Open the TUI; requires a terminal |
-| `claudex ctl config` | Open TUI settings |
-| `claudex ctl status [--json]` | Query authenticated running state |
-| `claudex ctl setup` | Create config/client key and sign in, without installing anything |
-| `claudex ctl setup --login` | Sign in again using the credential store's file lock |
-| `claudex ctl setup --no-browser` | Print the sign-in URL without opening a browser |
-| `claudex ctl setup --no-login` | Initialize without signing in |
-| `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
-| `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
-| `claudex ctl feedback [on|off|status|list]` | Control local feedback collection or read stored reports |
-| `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
-
-Use `--config PATH` on setup, run, logs, status, or the TUI. TUI and status accept
-`--url URL --key-file PATH` instead. `ctl run --listen` is the only way to bind a
-non-loopback address. It logs a warning because the HTTP listener has no TLS.
-Run `claudex ctl --help` or a command's `--help` for its complete syntax.
-
-Usage mistakes exit with status 2; startup failures exit with status 1. Once
-Claude is running, claudex propagates its exit status.
 
 ## Launcher overrides
 
@@ -182,10 +154,4 @@ Claude settings derived at launch contain the configured `model`, `effortLevel`,
 `--disallowedTools Artifact,SendFeedback,SendUserFeedback --settings <JSON>`.
 When local feedback is enabled, it also adds the session MCP configuration and
 allows its collector tool. See [feedback](feedback.md). Explicit Claude CLI options
-still work.
-
-## Monitoring data
-
-The dashboard uses the same client key as Claude Code. It keeps history in memory
-and clears it on restart. See [the TUI guide](tui.md) for what it
-measures and retains.
+still work. See [Running](running.md#commands-and-flags) for command syntax.

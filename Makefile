@@ -11,13 +11,18 @@ GOVULNCHECK_VERSION ?= v1.9.0
 GITLEAKS_VERSION ?= v8.30.1
 PREFIX ?= $(HOME)/.local
 
-.PHONY: build package test check lint secrets install docker clean e2e
+.PHONY: build package test check lint secrets install docker clean e2e docs-check
 
 build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags '$(LDFLAGS)' -o dist/claudex ./cmd/claudex
 
 package: build
-	COPYFILE_DISABLE=1 tar -czf '$(ARCHIVE)' dist/claudex examples docs README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md
+	COPYFILE_DISABLE=1 tar --exclude='docs/design' -czf '$(ARCHIVE)' dist/claudex examples docs README.md CHANGELOG.md SECURITY.md LICENSE THIRD_PARTY_NOTICES.md
+
+docs-check:
+	python3 .github/scripts/check_docs.py
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+	python3 .github/scripts/release.py --check
 
 test:
 	go test -race ./...

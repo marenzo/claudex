@@ -5,9 +5,8 @@ return the `dangerous_tool_use` verdicts Claude Code expects. This is a custom
 permission policy, not Anthropic's classifier and not Anthropic's no-charge
 classifier service. Both generation and classification consume Codex usage.
 
-This feature is **off by default**. It is an experimental implementation of the
-protocol observed in Claude Code 2.1.283 and checked again with 2.1.306. Small fixture tests establish protocol
-compatibility; they do not establish equivalent safety to Anthropic's classifier
+This feature is **off by default**. It implements an observed Claude Code
+protocol; dated checks are linked below. Fixture tests establish protocol compatibility; they do not establish equivalent safety to Anthropic's classifier
 or resistance to arbitrary prompt injection. Keep it opt-in while evaluating it.
 
 ## Enable
@@ -21,8 +20,7 @@ this field before starting the gateway:
 
 Any supported model or alias is accepted, independently of the generation model.
 The reviewer always uses `high` reasoning effort, independently of the generation
-effort. Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna passed the bounded live checks
-covered by the opt-in live fixtures. Saving through `ctl config` applies the
+effort. Saving through `ctl config` applies the
 validated change live; in-flight requests retain their original reviewer.
 Start a fresh `claudex` session in auto mode. The launcher selects
 `CLAUDE_CODE_AUTO_MODE_SERVER=1` when this field is nonempty.
@@ -68,7 +66,7 @@ Requests without a safeguard remain on the ordinary streaming path.
 
 Limits are four active classifier requests, 32 tool calls per response, 1 MiB of
 review input, 64 MiB of buffered response, 256 KiB of classifier response bytes,
-and a 60-second classifier deadline. Generation no longer reserves a classifier slot. Reviews wait for capacity with
+and a 60-second classifier deadline. Generation does not reserve a classifier slot. Reviews wait for capacity with
 cancellation; the 60-second deadline includes that wait.
 The review copy excludes opaque thinking signatures and redacted-thinking data;
 visible summaries, user requests, tool results and permission context remain.
@@ -130,72 +128,17 @@ use `classifier_failed`. These categories never include raw reviewer output or
 transport-error text. Repeated transport failures can still exhaust recovery;
 see [upstream recovery](running.md#upstream-recovery).
 
-## Protocol evidence and validation
+## Protocol and validation
 
-The official [gateway guide](https://code.claude.com/docs/en/llm-gateway-protocol)
-requires preserving safeguard requests and results. Its public documentation does
-not fully specify the wire schema. Inspection of the installed Claude Code
-2.1.283 implementation established this shape; the 2.1.306 package and local
-real-client check confirmed it again:
+Non-streamed replies include `safeguard_results` on the message. SSE replies put it
+in the terminal `message_delta.delta`, before `message_stop`. Each evaluated
+`dangerous_tool_use` verdict uses the exact tool ID delivered to Claude Code and
+an outcome of `flagged` or `not_flagged`.
 
-```json
-{
-  "safeguard_results": [{
-    "type": "dangerous_tool_use",
-    "status": {
-      "type": "available",
-      "tool_uses": {
-        "toolu_example": {
-          "type": "evaluated",
-          "outcome": "flagged",
-          "explanation": "The action is not authorized."
-        }
-      }
-    }
-  }]
-}
-```
-
-Non-streamed replies place the field on the message. SSE replies put it inside
-the terminal `message_delta.delta`, before `message_stop`. Verdict keys are the
-exact tool IDs the client receives. The request context includes rules, trusted
-directories, auto-mode policy, current directory, platform and Git state.
-
-Normal checks cover streamed and JSON responses, both verdicts, exact ID
-coverage, rejected contexts, ambiguous JSON, refusals, malformed and interrupted
-classifier responses, cancellation, concurrency limits and usage accounting.
-
-An isolated real-client test uses localhost model fixtures and only a harmless
-`printf` command. It proves Claude Code accepts the gateway's allow and deny
-verdicts without subscription access:
-
-```sh
-CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
-  go test -race -tags e2e \
-  -run '^TestClaudeSafeguard(Decisions|TransportRecovery)$' -v ./internal/proxy
-```
-
-The recovery check injects a classifier transport timeout and verifies both
-verdicts through the real CLI without regenerating the proposed call.
-
-The opt-in live test sends proposed actions to GPT without executing them. Supply
-a private credential copy **without `refresh_token`** so it cannot rotate the
-running service's sign-in:
-
-```sh
-CLAUDEX_TEST_AUTH_FILE=/private/path/auth-copy.json \
-  go test -tags live -run TestLiveGPTSafeguardReview -v ./internal/proxy
-```
-
-The initial Astra check allowed harmless printing and flagged an unauthorized
-credential upload whose tool description also tried to inject an approval.
-A combined test also passed the real Claude Code → claudex → Astra classifier →
-Claude Code path for a harmless `printf`. Generation was a local fixture;
-classification was live. The single review took about 6.7 seconds in that run.
-Run it with both variables above and
-`go test -tags 'live e2e' -run TestLiveClaudeGPTSafeguardDecision -v ./internal/proxy`.
-Broader adversarial evaluation, latency measurements on representative sessions,
-and compatibility testing on future Claude Code versions remain necessary.
+See [Development](development.md#tests) for fixture and live test commands, and
+[historical protocol evidence](history/auto-mode-validation-2026-10-22.md) for the
+client versions and bounded observations behind this implementation. Broader
+adversarial and future-client validation remain necessary.
 
 ## Review diagnostics and delegated workflows
 
@@ -203,8 +146,7 @@ Successful reviews log a request fingerprint, model, allow/flag counts, duration
 and token counts. Failures log bounded categories (timeout, HTTP failure, invalid
 verdict, or other review failure). Neither path logs commands, explanations,
 conversation text, or credential material. Request-context rejection has the
-`classifier_context` error kind. Existing older logs lack verdict counts and
-cannot retrospectively identify all policy decisions.
+`classifier_context` error kind.
 
 The reviewer decides safety and authority, not coding style. It must not invent
 read restrictions from write isolation rules or demand proof of hypothetical
@@ -214,18 +156,8 @@ Specific user intent and matching `auto_mode.allow` exceptions can clear soft
 denials. Hard denials and explicit ask rules remain in force, matching the
 [documented rule precedence](https://code.claude.com/docs/en/auto-mode-config).
 
-A workflow assignment may describe work without carrying the user's original
-authorization. Claude Code 2.1.306 explicitly labels computed workflow tasks as
-script output. The gateway preserves that provenance. Relaying only “delegate to
-agents” can omit the task being delegated, and a computed claim that the owner
-approved it cannot restore the missing authorization. Give the workflow the
-actual scoped user request; use a directly assigned agent when that preserves
-necessary context. Do not disable provenance or reinterpret generated approval
-claims as consent.
-
-A resumed worker can also retain an earlier stop-on-denial instruction while
-receiving renewed approval only as a coordinator's message. Approval visible in
-the parent is not guaranteed to reach the worker's review context as verifiable
-user authorization. Repeating the same relay can produce repeated denials. This
-approval-propagation limitation remains unresolved; claudex does not promote an
-agent's claim of approval into user consent.
+Delegated and resumed workers may lack the original user's authorization or retain
+an earlier stop-on-denial instruction. A coordinator's relay is not necessarily
+verifiable user consent in the worker's review context. Include the actual scoped
+user request when delegating; repeated generated claims of approval cannot restore
+missing authority. This approval-propagation limitation remains unresolved.

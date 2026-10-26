@@ -59,7 +59,7 @@ still a human-review task, not a guarantee of the deterministic grader.
 
 ## Reproducibility
 
-Commands and environment options are in [development](development.md#feedback-tests-and-evals).
+Commands and environment options are in [development](../development.md#feedback-tests-and-evals).
 The final run completed at `2026-10-23T12:55:32.238946Z`. Input hashes
 below correspond to the corrected fixtures/grader labels; the model-facing
 scenario text was unchanged by the regrade.

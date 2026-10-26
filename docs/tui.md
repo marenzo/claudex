@@ -7,14 +7,8 @@ It requires no local Codex sign-in. Noninteractive callers use `ctl status --jso
 
 ## Layout and controls
 
-The interface follows the terminal's light or dark background. It uses ordinary
-terminal glyphs; no special font, browser, or separate dashboard package is needed.
-Wide, tall terminals show a navigation rail and independent panes. Smaller terminals
-use top navigation and open request details in a focused screen. The header and
-keyboard hints stay visible while details scroll. Cards, selected rows, and the
-navigation rail have distinct surfaces. Overview highlights completions, success
-rate, input-cache reuse, and response time in a metrics strip. Settings groups
-generation, auto-mode review, and conversation-size controls.
+Colors follow the terminal background. Wide terminals show independent panes;
+smaller terminals use focused views. No special font is required.
 
 - **1–4:** Overview, Requests, Models, Settings. Click a navigation label to switch.
 - **Tab / Shift-Tab:** focus the next or previous pane; on Overview, select a chart.
@@ -33,11 +27,8 @@ On smaller terminals, one chart fills the workspace. **Left/right** chooses an e
 minute; **Enter** opens its retained requests. Minute totals can outlive individual
 request records, so an older minute may have counts but no matching records.
 
-**Requests** shows an outcome donut for all retained requests, with a separate
-usage and response-time summary for the current filter. Short terminals use a
-compact textual summary. Click an outcome label in the wide summary to filter it.
-The search and filter chips also accept mouse clicks. Tall request tables add
-spacing and row separators; shorter terminals show more compact rows.
+**Requests** shows retained calls, an outcome summary, filters, and an inspector.
+Click outcome labels or filter chips to filter records.
 
 - Arrows or **j/k** select a row; Enter focuses details; Esc returns to the list.
 - **/** searches; **m** cycles models; **e** cycles effort; **f** cycles outcomes.
@@ -70,12 +61,8 @@ so a draft from an earlier gateway cannot overwrite the new configuration.
 session to load the tool; disabling rejects new reports immediately. Stored reports
 remain available through `claudex ctl feedback list`. See [feedback](feedback.md).
 
-Charts use Braille lines, activity columns, and proportional token bars. Colors are
-paired with labels and values. Cached input is included in input; reasoning is
-included in output. Missing usage or first-output timing is shown as unavailable.
-The dashboard does not infer token counts, costs, or subscription balances.
-See [prompt caching](prompt-caching.md) for how reuse is routed and measured, and
-[private files](configuration.md#private-files) for credential locations.
+Colors are paired with labels. Missing usage and timing remain unavailable.
+See [Prompt caching](prompt-caching.md) for cache behavior.
 
 ## Privacy and retention
 
@@ -94,7 +81,9 @@ See [prompt caching](prompt-caching.md) for how reuse is routed and measured, an
   redaction misses. Review excerpts before sharing them.
 - Excerpts are visible only through the authenticated dashboard. The gateway log
   never stores them.
-- Everything resets when the gateway restarts.
+- Monitoring history and cache fingerprints reset on gateway restart. Gateway logs
+  and opt-in feedback records persist separately; see [Running](running.md#gateway-lifetime)
+  and [Feedback](feedback.md#storage-and-review).
 
 ## Polling
 
@@ -175,22 +164,10 @@ all retained records, regardless of the charts' time range. Date labels use the
 terminal host's local time. Wire timestamps are RFC3339, and bucket calculations use
 absolute timestamps.
 
-The private control/metrics API is version 2. Update the CLI and gateway together;
-there are no aliases for the old `first_output_ms` metric. The Anthropic-compatible
-`/v1/messages` interface is unchanged.
+The private control/metrics API is version 2. Update the CLI and gateway together.
+See [Running](running.md#updating-and-uninstalling).
 
 ## Configuration
 
-Model, effort, reviewer, and context/compaction windows save through the gateway's
-authenticated API, not a guessed local file. Validation and revision checks prevent
-invalid or conflicting writes. In-flight requests retain their original settings.
-Startup paths and bind addresses are visible but read-only. See
-[configuration](configuration.md) for persistence and new-Claude-session behavior.
-
-## Implementation and checks
-
-Bubble Tea v2 handles events and rendering; Lip Gloss v2 handles layout; Bubbles
-provides viewport and text input components. Polls are asynchronous and bounded.
-All untrusted display text is stripped of terminal escapes and control characters.
-Metrics and sampling logic live in `internal/metrics`; the interface lives in
-`internal/tui`. `make check` runs Go checks without Node or a frontend toolchain.
+Use Settings to edit preferences. See [Configuration](configuration.md#applying-changes)
+for validation, persistence, and when new Claude sessions are required.

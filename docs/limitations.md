@@ -3,7 +3,7 @@
 claudex translates between two protocols. It cannot make their capabilities
 identical.
 
-Auto mode can use Claude Code's client-side classifier or the opt-in
+Auto Mode can use Claude Code's client-side classifier or the opt-in
 [experimental GPT server classifier](auto-mode.md). Neither gives this gateway
 Anthropic's no-charge classifier service; classification consumes Codex usage.
 
@@ -14,14 +14,10 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   OAuth flow can change without notice. Model availability depends on the signed-in
   account and upstream behavior. claudex uses one account, with no API-key mode or
   account failover.
-- **Claude Code remains the harness.** Its UI, orchestration, automatic compaction,
-  tools, and feature gates behave as in Claude Code. Ultra sends the model-specific effort (`xhigh` for Astra and
-  6.1 Sol, otherwise `max`), matching current Codex normalization. Claude Code's ultracode workflow provides the delegation.
-  Max stays `max`. See [reasoning and tools](architecture.md#reasoning-and-tools).
-- **Reasoning controls differ.** Disabled thinking sends `none` where the model
-  supports it. Astra and GPT-6.1 Sol get their minimum, `low`, which does not mean zero reasoning.
-  Hidden summaries still keep encrypted continuity. An explicit effort the model
-  does not support fails with an error.
+- **Claude Code remains the harness.** It owns orchestration, tools, and automatic
+  compaction. Reasoning settings are translated rather than copied verbatim;
+  see [reasoning and tools](architecture.md#reasoning-and-tools). Disabled thinking
+  cannot guarantee zero reasoning on every model.
 - **Some generation controls are not forwarded.** `max_tokens`, `temperature`,
   `top_p`, and `stop_sequences` lose their Anthropic meaning. Do not rely on them to
   limit spend, response length, sampling, or stopping.
@@ -60,7 +56,7 @@ Anthropic's no-charge classifier service; classification consumes Codex usage.
   the same refresh-token file at the same time. In containers, mount directories,
   not individual credential files.
 - **Local trust boundary.** HTTP has no built-in TLS. Loopback binding and the
-  client key protect the local endpoint. The `-listen` override is for controlled
+  client key protect the local endpoint. The `--listen` override is for controlled
   setups such as Docker. TUI error excerpts can contain text echoed by the
   upstream server; see [dashboard privacy](tui.md#privacy-and-retention).
   Gateway logs rotate at 2 MiB with three older files.
@@ -115,8 +111,7 @@ truncated reads, and event-size limits each get a category. Unrecognized errors
 show as `transport_read_error`. `upstream_stalled` means Codex stopped sending
 events. The `messages` log line of every failed request includes `error_type` and
 `error_kind`. See [upstream recovery](running.md#upstream-recovery) for attempt
-counts, ping behavior and recovery limits. Older versions discarded the reader
-error, so their logs cannot show the cause.
+counts, ping behavior and recovery limits.
 
 **Compaction is slow.** First check whether the request is slow or actually failed.
 The dashboard shows request duration and usage, but it does not label compaction

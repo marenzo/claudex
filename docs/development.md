@@ -1,12 +1,12 @@
 # Development and releases
 
-Use Go 1.27.3 or newer. Bubble Tea v2, Lip Gloss v2, and Bubbles v2 are pinned
-Go dependencies. The binary includes the launcher, TUI, and gateway. No browser
-assets, frontend package manager, Node installation, or separate TUI installation
-is needed.
+Use the Go version declared in `go.mod` or newer. The binary includes the launcher,
+TUI, and gateway; no frontend build is required. Test tooling additionally uses
+Python 3. Claude Code and Docker are needed only for the indicated integration tests.
 
 ```sh
 make check                         # Go race tests, vet, gofmt check
+make docs-check                    # documentation links, contracts, release tests
 make lint                          # gitleaks, staticcheck, and govulncheck; needs network
 make secrets                       # only the gitleaks scan of every commit
 make build                         # dist/claudex
@@ -18,10 +18,9 @@ Cross-build with `GOOS=linux GOARCH=arm64 make build`. Output always goes to
 `dist/claudex`. Override `VERSION`, `COMMIT`, or `BUILD_DATE` for a reproducible
 build stamp. The binary does not depend on the source checkout at runtime.
 
-`make lint` runs gitleaks v8.30.1, staticcheck v0.8.2, and govulncheck v1.9.0. It
-downloads the pinned tools, so it needs network access. Override
-`GITLEAKS_VERSION`, `STATICCHECK_VERSION`, or `GOVULNCHECK_VERSION` to use another
-version. gitleaks scans every commit reachable from the checkout, so CI fetches
+`make lint` downloads tools pinned in `Makefile`, so it needs network access.
+Override `GITLEAKS_VERSION`, `STATICCHECK_VERSION`, or `GOVULNCHECK_VERSION` when needed.
+Gitleaks scans every commit reachable from the checkout, so CI fetches
 full history. Give fake credentials in tests a `fixture-` prefix;
 `.gitleaks.toml` allows only values that start with it.
 
@@ -60,6 +59,15 @@ your credential without a `refresh_token`, so it cannot rotate a running sign-in
 CLAUDEX_TEST_AUTH_FILE=/path/to/credential-copy.json go test -tags live ./internal/codex/
 ```
 
+Additional opt-in reviewer checks use the same non-refreshable credential copy:
+
+```sh
+CLAUDEX_TEST_AUTH_FILE=/path/to/credential-copy.json \
+  go test -tags live -run TestLiveGPTSafeguardReview -v ./internal/proxy
+# Add CLAUDEX_TEST_CLAUDE_BIN and -tags 'live e2e' for
+# TestLiveClaudeGPTSafeguardDecision (local generation, live classification).
+```
+
 Keep packages scoped to their responsibilities. Prefer direct functions over
 provider registries or generic plugin interfaces. Protocol fixes need behavioral
 tests for replay, ordering, cancellation, errors, and streamed and non-streamed
@@ -69,8 +77,7 @@ configuration, credentials, conversation captures, or generated binaries.
 ## End-to-end harness test
 
 `make e2e` builds a minimal Docker image with the Claude Code CLI and the gateway.
-The harness pins Node 26.12.1, npm 12.2.1, and Claude Code 2.1.309; Docker base
-images are pinned by digest. It mounts a private copy of your Codex sign-in and
+Runtime and Claude Code versions are pinned in `e2e/Dockerfile`, including image digests. It mounts a private copy of your Codex sign-in and
 client key, found through
 `~/.config/claudex/config.json`. Set `CLAUDEX_E2E_CONFIG` to use another config.
 
@@ -82,7 +89,10 @@ The test drives one resumed Claude Code session through 18 prompts. They cover:
 - error recovery and automatic compaction, with the window forced to 100k tokens
 - a fresh session that must recall the memory
 
-The test uses real subscription quota and takes several minutes.
+The test uses real subscription quota and takes several minutes. Unlike the live
+unit fixtures, this harness retains refresh capability. Cleanup copies a refreshed
+credential back to the host only if the host file still matches the initial copy.
+Do not share that refresh-token file with an unrelated running client during the run.
 `CLAUDEX_E2E_MODEL` and `CLAUDEX_E2E_EFFORT` select the model and effort.
 `CLAUDEX_E2E_SKIP_BUILD=1` reuses the last image. The test sits behind the `e2e`
 build tag, so `make check` and CI never run it. Claude Code 2.1.x does not offer
@@ -98,18 +108,33 @@ after Linux/macOS checks, lint, and all four package builds pass. The release ha
 Linux and macOS archives for amd64 and arm64, SHA-256 checksums, and build
 provenance attestations. Pull requests and manual CI runs do not publish.
 
-`VERSION` sets the minimum next stable version (currently `v1.2.0`). If that version
+`VERSION` sets the minimum next stable version, not the installed or latest release. If that version
 already exists, the next main push increments the highest stable tag's patch
 number. Change `VERSION` to request a higher minor or major version. Reruns reuse
 a tag already attached to the same commit and leave published assets unchanged.
 Releases are serialized; superseded main revisions skip publication. The job
 assembles assets in a draft before automatically publishing the complete release.
 
-Notes use the matching `CHANGELOG.md` version section when present; otherwise they
-list commit subjects since the previous stable tag. Write commit subjects as
-user-facing change lines. Existing release tags remain immutable.
+`CHANGELOG.md` is the release-notes source. Before merging, prepare a dated section
+for the version computed by the release planner. Publication fails if that section
+is missing or empty; commit subjects are not a fallback. Automatic patch numbering
+is unchanged. If main advances, recheck the planned version. Existing tags remain
+immutable. The release job does not commit changelog updates back to main.
 Both workflows use `make package`; set `GOOS`, `GOARCH`, `VERSION`, and optionally
 `ARCHIVE` to package another target locally.
+
+## Documentation maintenance
+
+Keep one authoritative explanation per topic: Running owns commands and lifecycle;
+Configuration owns defaults and aliases; TUI owns metric definitions; Architecture
+owns protocols. Other guides summarize and link. Use `claudex` for product prose,
+Auto Mode for the Claude feature, and command reviewer for its optional GPT reviewer.
+Preserve API identifiers. Record measured results with dates and tested versions.
+
+`make docs-check` checks local paths and anchors, packaged-document links, documented
+commands/defaults, and release-planner tests. Release archives include current guides
+and historical validation reports, but exclude design studies. Keep license notices
+intact and update dependency versions with `go.mod` changes.
 
 ## Security reports
 
@@ -143,20 +168,14 @@ CLAUDEX_FEEDBACK_EVAL_OUTPUT=/tmp/feedback-results.json \
 go test -tags live -run '^TestLiveFeedbackEvaluation$' -count=1 -timeout=20m -v ./internal/proxy
 ```
 
-By default this runs 24 synthetic scenarios against GPT-6.1 Sol and GPT-6 Astra
-at low reasoning effort, comparing a generic description with the production
-instructions while holding the name/schema constant. Two repeats produce 192
-requests. Override models with comma-separated `CLAUDEX_FEEDBACK_EVAL_MODELS`, or
-set `CLAUDEX_FEEDBACK_EVAL_ARM=clarified` to run only the production description.
-The test requires every clarified case to pass; baseline failures are reported
-without failing the test. Infrastructure failures are separate and fail the run.
-
-The artifact retains generated calls, final text, model metadata, input fingerprints,
-latency and separate selection/schema/classification/recovery/reproduction/evidence
-scores. No hidden reasoning is requested. Evidence grading checks known anchors
-and literal sensitive strings, not arbitrary semantic truth. Review outputs before
-claiming grounding or production reliability. Expected labels are never sent to
-models. The baseline is not Anthropic's native tool.
+The default evaluation compares generic and production descriptions across 24
+synthetic cases, two models, and two repeats (192 requests). Set
+`CLAUDEX_FEEDBACK_EVAL_MODELS` to comma-separated model IDs or
+`CLAUDEX_FEEDBACK_EVAL_ARM=clarified` for production instructions only. Clarified
+case failures and infrastructure failures fail the run; baseline failures are reported.
+Artifacts retain calls, final text, fingerprints, and separate field scores.
+Free-text truth still needs human review. See the [dated evaluation report](history/feedback-evaluation-2026-10-23.md)
+for interpretation, grader changes, and next validation work.
 
 Replay retained synthetic outputs after a grader correction without spending quota:
 
