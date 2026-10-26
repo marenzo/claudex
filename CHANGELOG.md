@@ -5,6 +5,10 @@ Released changes and upgrade actions. Earlier history is available in
 
 ## v1.2.3 — 2026-10-26
 
+- Add the bundled `/claudex:codex` skill and `ctl handoff` command to continue a
+  Claude session in native Codex CLI, with full recorded textual tool evidence,
+  private instruction snapshots, and project-memory import.
+
 - Consolidate operating guides, fix Docker setup and diagnostic commands, and
   distinguish historical validation from current behavior.
 - Check documentation links in source and release packages. Require versioned

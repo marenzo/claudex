@@ -52,6 +52,21 @@ transport failures, discarded partial verdicts and tool buffers, and prevention
 of replay after message delivery. See [recovery behavior](running.md#upstream-recovery)
 and [review diagnostics](auto-mode.md#review-failure-categories).
 
+The native handoff fixtures use temporary Claude/Codex homes, a scripted local
+provider, and no subscription credentials. They verify actual skill discovery,
+SessionStart binding, tool execution, native import/resume, full tool evidence,
+project memory, and retry identity:
+
+```sh
+make build
+CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
+CLAUDEX_TEST_CODEX_BIN="$(command -v codex)" \
+CLAUDEX_TEST_BINARY="$PWD/dist/claudex" \
+  go test -tags e2e -count=1 -timeout=3m -v \
+  -run '^(TestNativeCodexHandoff|TestClaudeToNativeCodexSkill)$' \
+  ./internal/handoff ./internal/proxy
+```
+
 The live Codex integration test sits behind the `live` build tag. Give it a copy of
 your credential without a `refresh_token`, so it cannot rotate a running sign-in:
 

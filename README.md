@@ -47,6 +47,8 @@ uninstall instructions.
 ## Capabilities
 
 - Use Claude Code's local tools, MCP servers, skills, and resumed sessions.
+- Continue a session in native Codex CLI with the built-in
+  [`/claudex:codex` skill](docs/handoff.md).
 - Choose a supported GPT model and reasoning effort through Claude arguments or
   TUI Settings. See [Configuration](docs/configuration.md#valid-values).
 - Inspect generation and review usage, cache reuse, timing, and failures in the
@@ -66,6 +68,7 @@ including unsupported controls, approximate context estimates, and credential ow
 | Install, operate, update, recover | [Running](docs/running.md) |
 | Settings, models, credentials, launcher overrides | [Configuration](docs/configuration.md) |
 | Controls, metrics, monitoring privacy | [Terminal dashboard](docs/tui.md) |
+| Continue in native Codex CLI | [Session handoff](docs/handoff.md) |
 | Permission review | [Auto Mode](docs/auto-mode.md) |
 | Cache reuse and diagnostics | [Prompt caching](docs/prompt-caching.md) |
 | Request flow, APIs, translation | [Architecture](docs/architecture.md) |

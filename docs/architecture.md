@@ -196,3 +196,14 @@ When enabled in preferences, the launcher injects a stdio MCP server backed by
 acceptance share a lock so disable is an immediate persistence boundary. Collection
 runs independently of inference and never invokes the native Anthropic feedback
 client. See [feedback](feedback.md) for provenance, retention and trust limits.
+
+## Native session handoff
+
+The launcher materializes an embedded Claude plugin beside the client key under
+`claudex.runtime/plugins/` and loads it with `--plugin-dir`. A SessionStart hook
+binds the current transcript through Claude's hook environment file. The
+`internal/handoff` package snapshots that history and local context, then calls
+native Codex's `externalAgentConfig/import` over a temporary stdio app-server.
+It verifies the saved thread identity and workspace before returning its resume
+command. This path is independent of the HTTP gateway. See
+[handoff behavior and limits](handoff.md).

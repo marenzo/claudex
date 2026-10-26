@@ -44,6 +44,7 @@ locations. See [private files](configuration.md#private-files) before moving the
 | `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
 | `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
 | `claudex ctl feedback [on|off|status|list]` | Control local feedback collection or read stored reports |
+| `claudex ctl handoff [--source PATH] [--launch \| --json]` | [Transfer a Claude session to native Codex](handoff.md) |
 | `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
 
 Use `--config PATH` on setup, run, logs, status, or the TUI. TUI and status accept
