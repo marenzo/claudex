@@ -15,6 +15,10 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 		{[]string{"feedback", "on", "--before", "cursor"}, "--before applies only"},
 		{[]string{"imagegen", "--bogus"}, "usage: claudex ctl imagegen"},
 		{[]string{"imagegen", "extra"}, "usage: claudex ctl imagegen"},
+		{[]string{"handoff", "--to", "other"}, "--to must be"},
+		{[]string{"handoff", "--thread-id", "uuid"}, "--thread-id is only"},
+		{[]string{"handoff", "--to", "cc", "--source", "/source.jsonl", "--thread-id", "uuid"}, "choose either"},
+		{[]string{"handoff", "--launch", "--json"}, "--launch requires"},
 		{[]string{"bogus"}, "unknown control command"},
 		{[]string{"run", "typo"}, "usage: claudex ctl run"},
 		{[]string{"run", "-bogus"}, "usage: claudex ctl run"},
@@ -35,7 +39,7 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 }
 
 func TestHelpIsNotAnError(t *testing.T) {
-	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}, {"feedback", "--help"}, {"imagegen", "--help"}} {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}, {"feedback", "--help"}, {"imagegen", "--help"}, {"handoff", "--help"}} {
 		if err := dispatch(append([]string{"ctl"}, args...)); err != nil {
 			t.Errorf("%q: %v", args, err)
 		}

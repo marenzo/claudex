@@ -205,5 +205,12 @@ binds the current transcript through Claude's hook environment file. The
 `internal/handoff` package snapshots that history and local context, then calls
 native Codex's `externalAgentConfig/import` over a temporary stdio app-server.
 It verifies the saved thread identity and workspace before returning its resume
-command. This path is independent of the HTTP gateway. See
+command. Setup also installs a namespaced Codex skill from the embedded binary.
+For `--to cc`, the same package resolves the exact saved Codex rollout, normalizes
+main-thread history with rollback/compaction handling, and materializes a new
+native Claude JSONL session. Content-addressed snapshots and a locked import
+manifest provide retry identity; the writable transcript never shares an inode
+with its archive. Session-cited Codex memory ranges become attributed Claude
+project notes with an atomic, deduplicated memory-index update. Preparation in
+both directions is independent of the HTTP gateway and does not run inference. See
 [handoff behavior and limits](handoff.md).

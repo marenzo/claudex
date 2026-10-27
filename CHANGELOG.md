@@ -5,6 +5,11 @@ Released changes and upgrade actions. Earlier history is available in
 
 ## v1.2.4 — 2026-10-27
 
+- Add Codex-to-Claude handoff with `ctl handoff --to cc`, exact thread/path
+  selection, native resumable Claude history, and scoped session-used memory.
+  Use the shared `claudex:handoff` skill name in both hosts; `/claudex:codex` is
+  removed. Rerun `claudex ctl setup --no-login` to install/update the Codex skill.
+
 - Put the executable at the root of release archives and source builds. Document
   downloading the latest platform release into `~/.local/bin` with curl or wget.
 

@@ -28,9 +28,9 @@ const usageText = `claudex runs Claude Code with GPT through your Codex subscrip
   claudex ctl status [--json]     Inspect the running gateway
   claudex ctl feedback on|off    Enable or disable local feedback collection
   claudex ctl feedback list      Read collected observations as JSON
-  claudex ctl handoff            Continue this Claude session in native Codex
+  claudex ctl handoff --to HOST  Continue in native Codex or Claude via claudex
   claudex ctl imagegen           Generate or edit an image through Codex
-  claudex ctl setup              Prepare config and Codex sign-in
+  claudex ctl setup              Prepare config, Codex skill, and sign-in
   claudex ctl run                Run a persistent foreground gateway
   claudex ctl logs [--follow]    Read gateway logs
   claudex ctl --version          Show gateway version
@@ -146,6 +146,18 @@ func cmdSetup(args []string) error {
 	if err != nil {
 		return err
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	skill, err := handoff.InstallCodexSkill(ctx, home, binary)
+	if err != nil {
+		return fmt.Errorf("install Codex handoff skill: %w", err)
+	}
 	store := auth.NewStore(cfg.AuthFile)
 	if !*noLogin {
 		_, err = store.Check()
@@ -158,6 +170,7 @@ func cmdSetup(args []string) error {
 			}
 		}
 	}
+	fmt.Printf("Codex handoff skill ready: %s\n", skill)
 	fmt.Println("Configuration ready. Run claudex, or claudex ctl run for a persistent foreground gateway.")
 	return nil
 }

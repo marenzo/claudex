@@ -40,9 +40,10 @@ For a source checkout, `make install` builds and copies it into
 `$(PREFIX)/bin`, with `PREFIX=$HOME/.local` by default. It does not edit shell files,
 sign in, register a service, or run the gateway.
 
-`ctl setup` creates a private config, a random client key, and a Codex sign-in. It
-keeps an existing configuration and sign-in. Use `--login` to sign in again,
-`--no-browser` to print the URL, or `--no-login` to prepare configuration only.
+`ctl setup` creates a private config and random client key, installs/updates the
+user-wide Codex handoff skill, and prepares Codex sign-in. It keeps an existing
+configuration and sign-in. Use `--login` to sign in again, `--no-browser` to print
+the URL, or `--no-login` to prepare config and the skill without signing in.
 The browser callback must reach `127.0.0.1:1455` on the machine running claudex.
 
 The default config is `~/.config/claudex/config.json`. Set `CLAUDEX_CONFIG` to use
@@ -61,14 +62,14 @@ locations. See [private files](configuration.md#private-files) before moving the
 | `claudex ctl` | Open the TUI; requires a terminal |
 | `claudex ctl config` | Open TUI settings |
 | `claudex ctl status [--json]` | Query authenticated running state |
-| `claudex ctl setup` | Create config/client key and sign in, without installing anything |
+| `claudex ctl setup` | Create config/client key, install the Codex handoff skill, and sign in |
 | `claudex ctl setup --login` | Sign in again using the credential store's file lock |
 | `claudex ctl setup --no-browser` | Print the sign-in URL without opening a browser |
-| `claudex ctl setup --no-login` | Initialize without signing in |
+| `claudex ctl setup --no-login` | Initialize and install/update the Codex skill without signing in |
 | `claudex ctl run [--listen IP:PORT]` | Run a persistent foreground gateway |
 | `claudex ctl logs [--follow] [--lines N]` | Read the bounded local gateway log |
 | `claudex ctl feedback [on|off|status|list]` | Control local feedback collection or read stored reports |
-| `claudex ctl handoff [--source PATH] [--launch \| --json]` | [Transfer a Claude session to native Codex](handoff.md) |
+| `claudex ctl handoff [--to codex\|cc] [--source PATH \| --thread-id UUID] [--launch \| --json]` | [Move sessions between Claude and Codex](handoff.md) |
 | `claudex ctl imagegen --prompt TEXT [--image PATH ...] [--transparent] [--out PATH] [--json]` | [Generate or edit an image](imagegen.md) |
 | `claudex ctl --version` | Print the gateway build version; root `--version` belongs to Claude |
 

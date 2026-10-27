@@ -1,9 +1,9 @@
 ---
-name: codex
+name: handoff
 description: Move the current Claude Code session to the native Codex CLI when the user asks to continue or transfer their work to Codex. Preserves conversation history and project memory in a native resumable thread. Does not delegate a background coding task.
 ---
 
-Run `"$CLAUDEX_BINARY" ctl handoff` with Bash. The SessionStart hook binds the exact
+Run `"$CLAUDEX_BINARY" ctl handoff --to codex` with Bash. The SessionStart hook binds the exact
 current transcript; do not search for a recent transcript or infer a session ID.
 If no binding exists, explain the error and ask for an explicit transcript path.
 Use `--source` only for a path the user supplies.

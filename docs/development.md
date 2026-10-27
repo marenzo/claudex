@@ -67,8 +67,9 @@ and [review diagnostics](auto-mode.md#review-failure-categories).
 
 The native handoff fixtures use temporary Claude/Codex homes, a scripted local
 provider, and no subscription credentials. They verify actual skill discovery,
-SessionStart binding, tool execution, native import/resume, full tool evidence,
-project memory, and retry identity:
+SessionStart/CODEX_THREAD_ID binding, tool execution, native import/resume in both
+directions, full tool evidence, Claude project memory, retry identity after real
+continuation, and a Codex → Claude → Codex round trip:
 
 ```sh
 make build
@@ -76,7 +77,7 @@ CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
 CLAUDEX_TEST_CODEX_BIN="$(command -v codex)" \
 CLAUDEX_TEST_BINARY="$PWD/claudex" \
   go test -tags e2e -count=1 -timeout=3m -v \
-  -run '^(TestNativeCodexHandoff|TestClaudeToNativeCodexSkill)$' \
+  -run '^(TestNativeCodexHandoff(Skill)?|TestClaudeToNativeCodexSkill|TestCodexToClaudeResumeAndRoundTrip)$' \
   ./internal/handoff ./internal/proxy
 ```
 

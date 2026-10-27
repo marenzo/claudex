@@ -55,7 +55,7 @@ func TestClaudeToNativeCodexSkill(t *testing.T) {
 	calls := 0
 	skillLoaded := false
 	receipt := ""
-	args, _ := json.Marshal(map[string]any{"command": `"$CLAUDEX_BINARY" ctl handoff --json`, "description": "Transfer this fixture session to native Codex", "timeout": 120000})
+	args, _ := json.Marshal(map[string]any{"command": `"$CLAUDEX_BINARY" ctl handoff --to codex --json`, "description": "Transfer this fixture session to native Codex", "timeout": 120000})
 	item, _ := json.Marshal(map[string]any{"type": "function_call", "id": "fc_handoff", "call_id": "call_handoff", "name": "Bash", "arguments": string(args)})
 	s := fixture(t, func(r *http.Request) (*http.Response, error) {
 		raw, _ := io.ReadAll(r.Body)
@@ -83,7 +83,7 @@ func TestClaudeToNativeCodexSkill(t *testing.T) {
 	settingsJSON, _ := json.Marshal(settings)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, claude, "--debug-file", filepath.Join(root, "claude-debug.log"), "--setting-sources", "", "--plugin-dir", plugin, "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--settings", string(settingsJSON), "--model", "astra", "--allowedTools", "Bash", "--max-turns", "3", "--output-format", "json", "-p", "/claudex:codex")
+	cmd := exec.CommandContext(ctx, claude, "--debug-file", filepath.Join(root, "claude-debug.log"), "--setting-sources", "", "--plugin-dir", plugin, "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--settings", string(settingsJSON), "--model", "astra", "--allowedTools", "Bash", "--max-turns", "3", "--output-format", "json", "-p", "/claudex:handoff")
 	cmd.Dir = cwd
 	for _, key := range []string{"PATH", "TMPDIR", "LANG"} {
 		if v, ok := os.LookupEnv(key); ok {
@@ -116,5 +116,5 @@ func TestClaudeToNativeCodexSkill(t *testing.T) {
 	if err != nil || !strings.Contains(string(ledger), "imported_thread_id") {
 		t.Fatal("native thread not persisted", err)
 	}
-	t.Log("real Claude loaded /claudex:codex, captured its transcript via SessionStart, ran the built-in handoff, and received a native Codex resume command")
+	t.Log("real Claude loaded /claudex:handoff, captured its transcript via SessionStart, ran the built-in handoff, and received a native Codex resume command")
 }
