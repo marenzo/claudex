@@ -3,6 +3,12 @@
 Released changes and upgrade actions. Earlier history is available in
 [GitHub releases](https://github.com/marenzo/claudex/releases).
 
+## v1.2.5 — 2026-10-27
+
+- Keep the session-handoff capability summary concise and expand its dedicated
+  guide with setup, both transfer directions, commands, behavior, limits, memory,
+  retries, storage, cleanup, and troubleshooting.
+
 ## v1.2.4 — 2026-10-27
 
 - Add Codex-to-Claude handoff with `ctl handoff --to cc`, exact thread/path

@@ -61,9 +61,7 @@ uninstall instructions.
 ## Capabilities
 
 - Use Claude Code's local tools, MCP servers, skills, and resumed sessions.
-- Move sessions between Claude Code and native Codex CLI with
-  [`claudex:handoff`](docs/handoff.md): `/claudex:handoff` in Claude,
-  `$claudex:handoff` in Codex after `claudex ctl setup`.
+- [Move sessions between Claude Code and native Codex CLI](docs/handoff.md).
 - Generate or edit images with the built-in
   [`/claudex:imagegen` skill](docs/imagegen.md) through the same Codex subscription.
 - Choose a supported GPT model and reasoning effort through Claude arguments or
