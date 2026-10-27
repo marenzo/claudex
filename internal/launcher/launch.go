@@ -151,7 +151,7 @@ func Run(claude string, args []string, cfg config.Config, c *control.Client) err
 	}
 	pluginPath, err := handoff.InstallPlugin(filepath.Join(filepath.Dir(cfg.ClientKeyFile), "claudex.runtime"))
 	if err != nil {
-		return fmt.Errorf("prepare built-in Codex skill: %w", err)
+		return fmt.Errorf("prepare built-in Codex skills: %w", err)
 	}
 	launchArgs := []string{"--plugin-dir", pluginPath, "--disallowedTools", "Artifact,SendFeedback,SendUserFeedback", "--settings", string(data)}
 	if cfg.Feedback.Enabled {

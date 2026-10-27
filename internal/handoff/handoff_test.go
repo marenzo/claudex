@@ -112,7 +112,7 @@ func TestPluginAndHookBindExactSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{".claude-plugin/plugin.json", "skills/codex/SKILL.md", "hooks/hooks.json"} {
+	for _, name := range []string{".claude-plugin/plugin.json", "skills/codex/SKILL.md", "skills/imagegen/SKILL.md", "hooks/hooks.json"} {
 		if _, err := os.Stat(filepath.Join(pluginPath, name)); err != nil {
 			t.Fatal(err)
 		}

@@ -3,6 +3,12 @@
 Released changes and upgrade actions. Earlier history is available in
 [GitHub releases](https://github.com/marenzo/claudex/releases).
 
+## v1.2.4 — 2026-10-27
+
+- Add the bundled `/claudex:imagegen` skill and `ctl imagegen` command for native
+  Codex subscription image generation, image edits/references, transparent PNGs,
+  and atomic workspace output without a separate API key.
+
 ## v1.2.3 — 2026-10-26
 
 - Add the bundled `/claudex:codex` skill and `ctl handoff` command to continue a

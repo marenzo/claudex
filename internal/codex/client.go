@@ -39,13 +39,16 @@ func (c *Client) request(ctx context.Context, credential auth.Credential, method
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "codex-tui/0.154.0")
 	req.Header.Set("Originator", "codex_cli_rs")
-	if method == http.MethodPost {
+	if method == http.MethodPost && path == "/codex/responses" {
 		req.Header.Set("Accept", "text/event-stream")
 	} else {
 		req.Header.Set("Accept", "application/json")
 	}
 	if session != "" {
 		req.Header.Set("Session_id", session)
+		if path == "/codex/images/generations" || path == "/codex/images/edits" {
+			req.Header.Set("X-Codex-Image-Turn-Id", session)
+		}
 	}
 	return c.HTTP.Do(req)
 }

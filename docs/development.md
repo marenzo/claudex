@@ -35,6 +35,19 @@ Tests use local fixtures. They must not require a live subscription, a running
 gateway, an existing build, or user credentials. Opt-in integration tests are
 separate.
 
+`internal/imagegen` fixtures verify the native generation/edit wire contract,
+reference bytes, PNG/alpha preservation, output collision recovery, invalid inputs,
+quota errors, cancellation, and prevention of automatic generation retries.
+
+The real Claude Code image-skill fixture uses scripted local inference and a
+stubbed image command, without subscription credentials. It verifies skill
+discovery, helper invocation, receipt delivery, and Read inspection of the PNG:
+
+```sh
+CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
+  go test -race -tags e2e -run '^TestClaudeNativeImagegenSkill$' -v ./internal/proxy
+```
+
 The local real-client permission tests need an installed Claude Code binary but
 use localhost model fixtures and an isolated Claude configuration. They execute
 only a harmless `printf` for an allowed verdict and verify that a flagged call is

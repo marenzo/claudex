@@ -13,6 +13,8 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 	}{
 		{[]string{"feedback", "unknown"}, "usage: claudex ctl feedback"},
 		{[]string{"feedback", "on", "--before", "cursor"}, "--before applies only"},
+		{[]string{"imagegen", "--bogus"}, "usage: claudex ctl imagegen"},
+		{[]string{"imagegen", "extra"}, "usage: claudex ctl imagegen"},
 		{[]string{"bogus"}, "unknown control command"},
 		{[]string{"run", "typo"}, "usage: claudex ctl run"},
 		{[]string{"run", "-bogus"}, "usage: claudex ctl run"},
@@ -33,7 +35,7 @@ func TestCommandMistakesAreUsageErrors(t *testing.T) {
 }
 
 func TestHelpIsNotAnError(t *testing.T) {
-	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}, {"feedback", "--help"}} {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"setup", "-help"}, {"run", "-h"}, {"config", "--help"}, {"feedback", "--help"}, {"imagegen", "--help"}} {
 		if err := dispatch(append([]string{"ctl"}, args...)); err != nil {
 			t.Errorf("%q: %v", args, err)
 		}

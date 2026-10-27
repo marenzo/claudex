@@ -29,6 +29,7 @@ const usageText = `claudex runs Claude Code with GPT through your Codex subscrip
   claudex ctl feedback on|off    Enable or disable local feedback collection
   claudex ctl feedback list      Read collected observations as JSON
   claudex ctl handoff            Continue this Claude session in native Codex
+  claudex ctl imagegen           Generate or edit an image through Codex
   claudex ctl setup              Prepare config and Codex sign-in
   claudex ctl run                Run a persistent foreground gateway
   claudex ctl logs [--follow]    Read gateway logs
@@ -74,6 +75,8 @@ func command(args []string) error {
 		return cmdFeedback(rest)
 	case "handoff":
 		return cmdHandoff(rest)
+	case "imagegen":
+		return cmdImagegen(rest)
 	case "handoff-session":
 		if len(rest) != 0 {
 			return usageError{"handoff-session takes hook input on stdin"}
