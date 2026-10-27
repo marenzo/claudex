@@ -14,10 +14,11 @@ PREFIX ?= $(HOME)/.local
 .PHONY: build package test check lint secrets install docker clean e2e docs-check
 
 build:
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags '$(LDFLAGS)' -o dist/claudex ./cmd/claudex
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags '$(LDFLAGS)' -o claudex ./cmd/claudex
 
 package: build
-	COPYFILE_DISABLE=1 tar --exclude='docs/design' -czf '$(ARCHIVE)' dist/claudex examples docs README.md CHANGELOG.md SECURITY.md LICENSE THIRD_PARTY_NOTICES.md
+	mkdir -p '$(dir $(ARCHIVE))'
+	COPYFILE_DISABLE=1 tar --exclude='docs/design' -czf '$(ARCHIVE)' claudex examples docs README.md CHANGELOG.md SECURITY.md LICENSE THIRD_PARTY_NOTICES.md
 
 docs-check:
 	python3 .github/scripts/check_docs.py
@@ -42,12 +43,13 @@ secrets:
 
 install: build
 	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -m 755 dist/claudex "$(DESTDIR)$(PREFIX)/bin/claudex"
+	install -m 755 claudex "$(DESTDIR)$(PREFIX)/bin/claudex"
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t $(IMAGE) .
 
 clean:
+	rm -f claudex
 	rm -rf dist
 
 # Opt-in end-to-end run: Claude Code + gateway in Docker against your real Codex sign-in.

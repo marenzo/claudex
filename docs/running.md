@@ -2,17 +2,41 @@
 
 ## Portable binary
 
-Download and unpack a platform archive, or build with `make build`. Both put the
-single binary at `dist/claudex`. Linux and macOS use the same launcher:
+Use the [getting-started commands](../README.md#get-started) to download the
+latest release for your OS and architecture into `~/.local/bin`. Each archive
+contains the executable `claudex` at its root, alongside documentation and licenses.
+Only the executable is extracted into the installation directory.
+
+If you prefer `wget`, use the same `version` and `archive` variables from those
+commands and replace the `curl` download step with:
 
 ```sh
-./dist/claudex                   # prepare sign-in if needed; start Claude
-./dist/claudex --resume
-./dist/claudex ctl               # dashboard, in another terminal
+wget -O "$HOME/.local/bin/$archive" \
+  "https://github.com/marenzo/claudex/releases/download/${version}/${archive}"
 ```
 
-No installation is necessary. To use `claudex` without the relative path, copy the
-binary into a directory on PATH. `make install` builds and copies it into
+For an archive downloaded manually from
+[Releases](https://github.com/marenzo/claudex/releases), extract and run:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+tar -xzf /path/to/claudex-VERSION-OS-ARCH.tar.gz -C "$HOME/.local/bin" claudex
+export PATH="$HOME/.local/bin:$PATH"
+claudex ctl --version
+```
+
+The supported archive suffixes are `darwin-amd64` (Intel Mac), `darwin-arm64`
+(Apple Silicon), `linux-amd64` (x86-64), and `linux-arm64` (ARM64).
+Linux and macOS use the same launcher:
+
+```sh
+claudex                         # prepare sign-in if needed; start Claude
+claudex --resume
+claudex ctl                     # dashboard, in another terminal
+```
+
+The binary can also run directly as `./claudex` after unpacking the full archive.
+For a source checkout, `make install` builds and copies it into
 `$(PREFIX)/bin`, with `PREFIX=$HOME/.local` by default. It does not edit shell files,
 sign in, register a service, or run the gateway.
 
@@ -146,8 +170,8 @@ Sign in on the host because the callback listener binds to loopback. Prepare a
 separate directory for Docker, retaining private permissions:
 
 ```sh
-make build docker
-./dist/claudex ctl setup --config "$HOME/.config/claudex-docker/host.json"
+make install docker
+claudex ctl setup --config "$HOME/.config/claudex-docker/host.json"
 cp examples/config.json "$HOME/.config/claudex-docker/config.json"
 chmod 600 "$HOME/.config/claudex-docker/config.json"
 docker run --rm --name claudex \
@@ -166,8 +190,8 @@ Keep the container running. In another host terminal, launch Claude; open the TU
 in a third terminal:
 
 ```sh
-CLAUDEX_CONFIG="$HOME/.config/claudex-docker/host.json" ./dist/claudex
-./dist/claudex ctl --url http://127.0.0.1:8317 \
+CLAUDEX_CONFIG="$HOME/.config/claudex-docker/host.json" claudex
+claudex ctl --url http://127.0.0.1:8317 \
   --key-file "$HOME/.config/claudex-docker/client-key"
 ```
 

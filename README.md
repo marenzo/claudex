@@ -10,12 +10,28 @@ subscription limits apply.
 
 ## Get started
 
-Download and unpack the Linux or macOS archive for your architecture from
-[Releases](https://github.com/marenzo/claudex/releases), then run:
+Download the latest Linux or macOS [release](https://github.com/marenzo/claudex/releases)
+and extract its root-level binary into `~/.local/bin`:
 
 ```sh
-./dist/claudex
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+arch="$(uname -m | sed 's/^x86_64$/amd64/; s/^aarch64$/arm64/')"
+release_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/marenzo/claudex/releases/latest)"
+version="${release_url##*/}"
+archive="claudex-${version}-${os}-${arch}.tar.gz"
+
+mkdir -p "$HOME/.local/bin"
+curl -fL "https://github.com/marenzo/claudex/releases/download/${version}/${archive}" \
+  -o "$HOME/.local/bin/$archive"
+tar -xzf "$HOME/.local/bin/$archive" -C "$HOME/.local/bin" claudex
+rm "$HOME/.local/bin/$archive"
+export PATH="$HOME/.local/bin:$PATH"
+claudex
 ```
+
+Add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` or `~/.bashrc` to keep the
+command available in new terminals. See [Running](docs/running.md#portable-binary)
+for a `wget` alternative and manual extraction.
 
 First interactive use prepares private configuration, opens Codex sign-in, and
 launches Claude Code. The launcher starts or reuses a local gateway. Concurrent
@@ -25,21 +41,19 @@ active requests finish.
 In another terminal, open the dashboard:
 
 ```sh
-./dist/claudex ctl
+claudex ctl
 ```
 
 Claude arguments pass through, including resumed sessions and noninteractive work:
 
 ```sh
-./dist/claudex --resume
-./dist/claudex --model sol
-./dist/claudex -p 'Explain this repository'
+claudex --resume
+claudex --model sol
+claudex -p 'Explain this repository'
 ```
 
-Complete `./dist/claudex ctl setup` before first noninteractive use. To run
-`claudex` without the relative path, copy the binary into a directory on PATH.
-For source builds, `make build` creates the same binary and `make install`
-optionally copies it to `~/.local/bin`.
+Complete `claudex ctl setup` before first noninteractive use. For source builds,
+`make install` builds and installs the command into `~/.local/bin`.
 
 See [Running](docs/running.md) for foreground, Homebrew, Docker, updates, and
 uninstall instructions.

@@ -5,6 +5,9 @@ Released changes and upgrade actions. Earlier history is available in
 
 ## v1.2.4 — 2026-10-27
 
+- Put the executable at the root of release archives and source builds. Document
+  downloading the latest platform release into `~/.local/bin` with curl or wget.
+
 - Add the bundled `/claudex:imagegen` skill and `ctl imagegen` command for native
   Codex subscription image generation, image edits/references, transparent PNGs,
   and atomic workspace output without a separate API key.

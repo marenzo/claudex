@@ -82,8 +82,14 @@ def main():
     count, errors = check_links(root, files)
     if not args.package:
         errors += check_contracts(root)
-    elif not (root / 'SECURITY.md').is_file() or (root / 'docs/design').exists():
-        errors.append('release must include SECURITY.md and exclude docs/design')
+    else:
+        binary = root / 'claudex'
+        if binary.is_symlink() or not binary.is_file() or not (binary.stat().st_mode & 0o111):
+            errors.append('release must include an executable claudex at the archive root')
+        if (root / 'dist').exists():
+            errors.append('release must not contain a dist directory')
+        if not (root / 'SECURITY.md').is_file() or (root / 'docs/design').exists():
+            errors.append('release must include SECURITY.md and exclude docs/design')
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1

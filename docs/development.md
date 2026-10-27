@@ -9,14 +9,14 @@ make check                         # Go race tests, vet, gofmt check
 make docs-check                    # documentation links, contracts, release tests
 make lint                          # gitleaks, staticcheck, and govulncheck; needs network
 make secrets                       # only the gitleaks scan of every commit
-make build                         # dist/claudex
-./dist/claudex ctl --version
+make build                         # ./claudex
+./claudex ctl --version
 make package                       # archive for this OS/architecture in dist/
 ```
 
 Cross-build with `GOOS=linux GOARCH=arm64 make build`. Output always goes to
-`dist/claudex`. Override `VERSION`, `COMMIT`, or `BUILD_DATE` for a reproducible
-build stamp. The binary does not depend on the source checkout at runtime.
+`claudex` at the checkout root. Override `VERSION`, `COMMIT`, or `BUILD_DATE` for a
+reproducible build stamp. The binary does not depend on the source checkout at runtime.
 
 `make lint` downloads tools pinned in `Makefile`, so it needs network access.
 Override `GITLEAKS_VERSION`, `STATICCHECK_VERSION`, or `GOVULNCHECK_VERSION` when needed.
@@ -74,7 +74,7 @@ project memory, and retry identity:
 make build
 CLAUDEX_TEST_CLAUDE_BIN="$(command -v claude)" \
 CLAUDEX_TEST_CODEX_BIN="$(command -v codex)" \
-CLAUDEX_TEST_BINARY="$PWD/dist/claudex" \
+CLAUDEX_TEST_BINARY="$PWD/claudex" \
   go test -tags e2e -count=1 -timeout=3m -v \
   -run '^(TestNativeCodexHandoff|TestClaudeToNativeCodexSkill)$' \
   ./internal/handoff ./internal/proxy
@@ -150,6 +150,8 @@ is unchanged. If main advances, recheck the planned version. Existing tags remai
 immutable. The release job does not commit changelog updates back to main.
 Both workflows use `make package`; set `GOOS`, `GOARCH`, `VERSION`, and optionally
 `ARCHIVE` to package another target locally.
+The binary is `claudex` at each archive's root. Extracted-package validation rejects
+a missing or nonexecutable root binary and any `dist/` directory in the archive.
 
 ## Documentation maintenance
 
@@ -181,7 +183,7 @@ scripted inference (no provider request):
 ```sh
 make build
 CLAUDEX_TEST_CLAUDE_BIN=/absolute/path/to/claude \
-CLAUDEX_TEST_BINARY="$PWD/dist/claudex" \
+CLAUDEX_TEST_BINARY="$PWD/claudex" \
 go test -tags e2e -run '^TestClaudeLocalFeedbackMCP$' -count=1 -timeout=2m -v ./internal/proxy
 ```
 
