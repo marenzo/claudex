@@ -6,7 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.0
 	charm.land/lipgloss/v2 v2.0.6
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/tidwall/gjson v1.20.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.10.0
